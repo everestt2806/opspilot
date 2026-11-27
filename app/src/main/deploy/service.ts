@@ -7,6 +7,7 @@ import type {
   DeployStartInput,
   DeploySourceInput,
   Deployment,
+  DetectionMethod,
   DetectionResultDto,
   GitDeployInput,
   GitSourceInput,
@@ -18,19 +19,18 @@ import { AppRepository } from '../db/appRepository'
 import { DeploymentRepository } from '../db/deploymentRepository'
 import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
+import { shellQuote } from '../ssh/shellQuote'
 import { DeployPipeline } from './pipeline'
 import { SshExposureManager, type ExposureManager } from './exposure'
+import { withAppLock } from '../monitor/appLock'
 import { allocatePort } from './portPolicy'
-import {
-  listListeningPorts,
-  readExistingEnvFile,
-  runPrecheck,
-  toPrecheckResult
-} from './precheck'
+import { listListeningPorts, readExistingEnvFile, runPrecheck, toPrecheckResult } from './precheck'
 import { detectSource } from './detectionDto'
 import { PreparedGitSources, type PreparedGitLease } from './preparedGitSources'
 import { AppError } from '../errors'
 import { resolveExistingEnv } from './templates'
+import { redactText } from '../doctor/engine'
+import { maskSecrets } from '../logger'
 import { join as posixJoin } from 'node:path/posix'
 
 /**
@@ -39,6 +39,7 @@ import { join as posixJoin } from 'node:path/posix'
  */
 export class DeployService {
   readonly pipeline: DeployPipeline
+  private readonly db: SqliteDatabase
   private readonly ssh: SshManager
   private readonly vpsRepository: VpsRepository
   private readonly appRepository: AppRepository
@@ -52,6 +53,7 @@ export class DeployService {
     gitSnapshotFactory?: ConstructorParameters<typeof PreparedGitSources>[0]
     exposure?: ExposureManager
   }) {
+    this.db = deps.db
     this.ssh = deps.ssh
     this.pipeline = new DeployPipeline({
       ...deps,
@@ -111,10 +113,9 @@ export class DeployService {
 
     const deployedExistingApp = existingApp?.current_deployment_id ? existingApp : null
     if (deployedExistingApp) {
-      const sourcePlan = prepared?.plan ??
-        (this.isGitInput(input)
-          ? null
-          : detectSource((input as DeployInput).source_path).plan)
+      const sourcePlan =
+        prepared?.plan ??
+        (this.isGitInput(input) ? null : detectSource((input as DeployInput).source_path).plan)
       const checks: PrecheckResult['checks'] = [...detail.checks]
       if (!sourcePlan) {
         throw new AppError('VALIDATION', 'Không thể xác minh source đã chuẩn bị. Hãy chuẩn bị lại.')
@@ -267,6 +268,118 @@ export class DeployService {
     this.assertNotVpsImported(this.appRepository.getById(appId))
     const { deploymentId } = this.pipeline.rollback(appId, targetDeploymentId)
     return { deployment_id: deploymentId }
+  }
+
+  rollbackAuto(
+    appId: number,
+    targetDeploymentId: number,
+    meta: { method: DetectionMethod; consecutive: number; peakScore: number }
+  ): Promise<{
+    ok: boolean
+    deploymentId: number
+    fromVersion: number
+    toVersion: number
+    error?: string
+  }> {
+    this.assertNotVpsImported(this.appRepository.getById(appId))
+    this.assertDesktopControl(appId)
+    return this.pipeline.rollbackAuto(appId, targetDeploymentId, meta)
+  }
+
+  async stopApp(appId: number): Promise<void> {
+    await this.runAppContainerAction(appId, 'stop')
+  }
+
+  async startApp(appId: number): Promise<void> {
+    await this.runAppContainerAction(appId, 'start')
+  }
+
+  async restartApp(appId: number): Promise<void> {
+    await this.runAppContainerAction(appId, 'restart')
+  }
+
+  async readAppLogs(
+    appId: number,
+    tailLines = 120
+  ): Promise<{ container_name: string; lines: string[]; truncated: boolean }> {
+    const app = this.appRepository.getById(appId)
+    this.assertNotVpsImported(app)
+    const boundedTail = Math.min(
+      Math.max(Math.trunc(Number.isFinite(tailLines) ? tailLines : 120), 20),
+      500
+    )
+    const containerName = `${app.name}-app`
+    const result = await this.ssh.exec(
+      app.vps_id,
+      `docker logs --tail ${boundedTail} --timestamps ${shellQuote(containerName)} 2>&1`,
+      { timeoutMs: 15_000, retryOnReconnect: true }
+    )
+    if (result.code !== 0) {
+      throw new AppError('UNKNOWN', `Không đọc được log container ${containerName}.`, {
+        cause: new Error(redactText(maskSecrets(result.stderr.trim() || result.stdout.trim())))
+      })
+    }
+    const rawCombined = redactText(maskSecrets(result.stdout))
+    const allLines = rawCombined
+      .split(/\r?\n/)
+      .filter((line, idx, arr) => idx < arr.length - 1 || line.length > 0)
+    const capped = allLines.slice(-boundedTail)
+    return {
+      container_name: containerName,
+      lines: capped,
+      truncated: allLines.length >= boundedTail
+    }
+  }
+
+  private async runAppContainerAction(
+    appId: number,
+    action: 'start' | 'stop' | 'restart'
+  ): Promise<void> {
+    const app = this.appRepository.getById(appId)
+    this.assertNotVpsImported(app)
+    this.assertDesktopControl(appId)
+    await withAppLock(appId, async () => {
+      if (this.pipeline.hasActiveRun(appId)) {
+        throw new AppError(
+          'VALIDATION',
+          'App đang có pipeline đang chạy. Hãy chờ hoàn tất trước khi điều khiển container.'
+        )
+      }
+      const composeDir = shellQuote(posixJoin('/opt/opspilot', app.name))
+      const subcommand =
+        action === 'stop' ? 'stop app' : action === 'restart' ? 'restart app' : 'up -d app'
+      const result = await this.ssh.exec(
+        app.vps_id,
+        `cd ${composeDir} && docker compose ${subcommand}`,
+        {
+          timeoutMs: 60_000,
+          retryOnReconnect: false
+        }
+      )
+      if (result.code !== 0) {
+        const verb =
+          action === 'stop' ? 'dừng' : action === 'restart' ? 'khởi động lại' : 'khởi động'
+        throw new AppError('UNKNOWN', `Không thể ${verb} app ${app.name}.`, {
+          cause: new Error(redactText(maskSecrets(result.stderr.trim() || result.stdout.trim())))
+        })
+      }
+    })
+  }
+
+  private assertDesktopControl(appId: number): void {
+    const hasTable = this.db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='product_app_control'")
+      .get()
+    if (!hasTable) return
+    const control = this.db
+      .prepare('SELECT mode FROM product_app_control WHERE app_id=?')
+      .get(appId) as { mode: string } | undefined
+    if (control?.mode === 'product') {
+      throw new AppError(
+        'VALIDATION',
+        'App này đang ở Product mode do controller quản lý; không điều khiển trực tiếp từ Desktop.'
+      )
+    }
   }
 
   listApps(vpsId?: number): App[] {

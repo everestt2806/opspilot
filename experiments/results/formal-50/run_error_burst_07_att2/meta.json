@@ -1,0 +1,17 @@
+{
+  "run_id": 20,
+  "scenario": "error_burst",
+  "repeat_index": 7,
+  "attempt_index": 2,
+  "protocol_version": "1.0",
+  "status": "completed",
+  "clock_offset_ms": 439,
+  "detection_grace_s": 60,
+  "counts": {
+    "metric_sample": 456,
+    "score_sample": 2280,
+    "alert": 24,
+    "experiment_run": 1
+  },
+  "shard": "shard1"
+}

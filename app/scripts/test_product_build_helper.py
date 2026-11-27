@@ -1,4 +1,4 @@
-"""Retest hành vi an toàn sau handoff; không dùng Docker/socket/network."""
+"""Unit tests for build helper safety boundaries without Docker, sockets, or network."""
 from __future__ import annotations
 
 import io

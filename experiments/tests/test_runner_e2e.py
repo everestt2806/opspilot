@@ -2693,3 +2693,64 @@ def test_runner_invalid_key_file_with_stale_env_secret_aborts_without_deploy(
     assert "không tồn tại" in res.abort_reason
     assert deploy_adapter.call_count == 0
     assert len(poller_adapter.started_ssh_secrets) == 0
+
+
+def test_resolve_loadgen_app_url_maps_public_vps_url_to_internal_service() -> None:
+    """Public VPS URL used by fault API maps to internal container URL for remote loadgen."""
+    from experiments.run_experiment import _resolve_loadgen_app_url
+
+    assert (
+        _resolve_loadgen_app_url("http://157.245.195.121:30000", "express-api", MockSshClient())
+        == "http://app:3000"
+    )
+    assert (
+        _resolve_loadgen_app_url("http://127.0.0.1:3000", "express-api", MockSshClient())
+        == "http://127.0.0.1:3000"
+    )
+    assert (
+        _resolve_loadgen_app_url("http://157.245.195.121:30000", "express-api", None)
+        == "http://157.245.195.121:30000"
+    )
+    assert (
+        _resolve_loadgen_app_url(
+            "http://157.245.195.121:30000",
+            "express-api",
+            MockSshClient(),
+            loadgen_app_url="http://127.0.0.1:30000",
+        )
+        == "http://127.0.0.1:30000"
+    )
+
+
+def test_system_ssh_client_preserves_docker_no_such_container_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Docker inspect missing container literal is preserved without bypassing SSH secret redaction."""
+    from types import SimpleNamespace
+
+    import experiments.run_experiment as runner
+
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="Error response from daemon: No such container: opspilot-loadgen-express-api\n",
+        ),
+    )
+    client = runner.SystemSshClient(host="127.0.0.1", key_file="dummy")
+    code, _out, err = client.exec("docker inspect -f '{{.State.Status}}' opspilot-loadgen-express-api")
+    assert code == 1
+    assert err == "No such container"
+
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="error: no such object: opspilot-loadgen-express-api\n",
+        ),
+    )
+    code2, _out2, err2 = client.exec("docker inspect -f '{{.State.Status}}' opspilot-loadgen-express-api")
+    assert code2 == 1
+    assert err2 == "No such container"

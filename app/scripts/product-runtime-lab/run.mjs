@@ -1,0 +1,1200 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone JavaScript integration lab. */
+import assert from 'node:assert/strict'
+import { execFileSync, spawn } from 'node:child_process'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { createRequire } from 'node:module'
+import net from 'node:net'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
+
+if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
+const allowedFlags = new Set([
+  '--restore-failure',
+  '--spa',
+  '--nextjs',
+  '--environment',
+  '--postgres',
+  '--env-before-database',
+  '--trace',
+  '--public-git-checkpoint-gate'
+])
+if (process.argv.slice(2).some((flag) => !allowedFlags.has(flag)))
+  throw new Error('RUNTIME_LAB_FLAG_INVALID')
+process.env.PATH = `${dirname(process.execPath)}:${process.env.PATH}`
+const artifact = process.env.OPSPILOT_R1_ARTIFACT
+if (!artifact) throw new Error('R1_ARTIFACT_REQUIRED')
+const {
+  initializeDatabase,
+  closeDatabase,
+  ProductDeployRepository,
+  ProductRuntimeRepository,
+  SshManager,
+  executeProductDeployPipeline,
+  recoverProductRuntimeSession,
+  AesGcmCredentialCipher,
+  ProductEnvironmentRepository,
+  ProductEnvironmentSelection,
+  ProductEnvironmentRuntime,
+  ProductPostgresRuntime,
+  ProductPostgresRepository,
+  ProductPostgresSelection,
+  ControllerExposure,
+  ControllerClientAuth,
+  canonicalH2Json
+} = createRequire(artifact)(artifact)
+const repo = resolve(import.meta.dirname, '../../..')
+process.env.OPSPILOT_TEMPLATES_DIR = join(repo, 'templates')
+const nonce = randomBytes(6).toString('hex')
+const controller = `r1-${nonce}`
+const appName = `r1-${nonce}`
+const appNames = new Map([
+  [1, appName],
+  [2, `${appName}-first`]
+])
+const restoreFailure = process.argv.includes('--restore-failure')
+const spa = process.argv.includes('--spa')
+const next = process.argv.includes('--nextjs')
+if (spa && next) throw Error('FRAMEWORK_FLAGS_CONFLICT')
+const framework = spa ? 'static-spa' : next ? 'nextjs' : 'express'
+const environmentEnabled = process.argv.includes('--environment')
+const postgresEnabled = process.argv.includes('--postgres')
+const environmentBeforeDatabase = process.argv.includes('--env-before-database')
+if (environmentBeforeDatabase && (!postgresEnabled || !environmentEnabled))
+  throw Error('ENV_DATABASE_ORDER_GATE_FLAGS_INVALID')
+if (postgresEnabled && spa) throw Error('SPA_POSTGRES_UNSUPPORTED')
+const postgresResources = new Map()
+const traceEnabled = process.argv.includes('--trace')
+const scratch = mkdtempSync(join(tmpdir(), 'opspilot-r1-'))
+chmodSync(scratch, 0o700)
+const output = resolve(repo, 'app/.out-scripts/product-runtime-lab', nonce)
+mkdirSync(output, { recursive: true })
+const helper = join(scratch, 'helper')
+const state = join(scratch, 'target-state')
+const source = join(scratch, 'source')
+const secret = randomBytes(32)
+const cipher = new AesGcmCredentialCipher(randomBytes(32))
+const publicValue = 'Public Sổ Đọc $HOME "quoted" \\ end'
+const runtimeValues = (revision) => ({
+  APP_TOKEN: `SYNTHETIC_ONLY_${revision} $HOME "quote" \\ = # 日本語  `,
+  EMPTY: '',
+  SPACES: '  leading and trailing  ',
+  UNICODE: 'a\u0085b\u2028c\u2029d'
+})
+const publicValues = () =>
+  next ? { NEXT_PUBLIC_TITLE: publicValue } : spa ? { VITE_TITLE: publicValue } : {}
+const configJson = framework === 'express' ? '{}' : JSON.stringify({ framework })
+const configHash = createHash('sha256').update(configJson).digest('hex')
+const subjectFiles = [
+  'target_execution_guard.py',
+  'target_guarded_ssh_helper.py',
+  'target_product_runtime.py'
+]
+const subjectHashes = Object.fromEntries(
+  subjectFiles.map((file) => [
+    file,
+    createHash('sha256')
+      .update(readFileSync(join(repo, 'app/src/main/controlPlane', file)))
+      .digest('hex')
+  ])
+)
+const driverHash = createHash('sha256')
+  .update(readFileSync(import.meta.filename))
+  .digest('hex')
+const bundleHash = createHash('sha256').update(readFileSync(artifact)).digest('hex')
+const cases = []
+let stage = 'preflight'
+let database, manager, sshd, heartbeat
+let cleanup = true
+let failure = null
+let pin
+let lastOperation = null
+let lastRuntimeStep = null
+const run = (program, args, options = {}) =>
+  execFileSync(program, args, {
+    encoding: 'utf8',
+    timeout: 120000,
+    maxBuffer: 512 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    ...options
+  }).trim()
+const docker = (...args) => run('docker', args)
+const inspect = (kind, id) => JSON.parse(docker(kind, 'inspect', id))[0]
+const record = (name, evidence) => {
+  cases.push({ name, status: 'PASS', ...evidence })
+  writeFileSync(join(output, 'progress.json'), JSON.stringify({ nonce, stage, cases }, null, 2))
+  console.log(JSON.stringify({ case: name, status: 'PASS' }))
+}
+let deadlineExpired = false
+const deadline = setTimeout(
+  () => {
+    deadlineExpired = true
+    failure = { stage, code: 'LAB_DEADLINE' }
+    manager?.disconnectAll().catch(() => {})
+  },
+  (process.argv.includes('--public-git-checkpoint-gate') ? 25 : 12) * 60000
+)
+const port = await reservePort()
+const hostPort = environmentEnabled ? await reserveProductPort() : await reservePort()
+try {
+  docker('info', '--format', '{{.ServerVersion}}')
+  assert.equal(docker('ps', '-aq', '--filter', `name=^/${appName}-`), '')
+  assert.equal(existsSync(`/opt/opspilot/${appName}`), false)
+  mkdirSync(helper, { mode: 0o700 })
+  for (const file of [
+    'target_execution_guard.py',
+    'target_guarded_ssh_helper.py',
+    'target_product_runtime.py'
+  ])
+    cpSync(join(repo, 'app/src/main/controlPlane', file), join(helper, file))
+  cpSync(join(import.meta.dirname, 'trace_helper.py'), join(helper, 'trace_helper.py'))
+  for (const key of ['host', 'client']) {
+    run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(scratch, key)])
+    chmodSync(join(scratch, key), 0o600)
+  }
+  pin = run('ssh-keygen', ['-lf', join(scratch, 'host.pub'), '-E', 'sha256']).match(
+    /SHA256:[A-Za-z0-9+/]{43}/
+  )?.[0]
+  assert.ok(pin)
+  const username = run('id', ['-un'])
+  assert.equal(username, 'root', 'lab requires root for isolated sshd/guard directory')
+  mkdirSync('/run/sshd', { recursive: true })
+  writeFileSync(
+    join(scratch, 'sshd_config'),
+    [
+      `Port ${port}`,
+      'ListenAddress 127.0.0.1',
+      `HostKey ${join(scratch, 'host')}`,
+      `PidFile ${join(scratch, 'sshd.pid')}`,
+      `AuthorizedKeysFile ${join(scratch, 'client.pub')}`,
+      'AllowUsers root',
+      'PermitRootLogin yes',
+      'StrictModes no',
+      'UsePAM no',
+      'PasswordAuthentication no',
+      'KbdInteractiveAuthentication no',
+      'PubkeyAuthentication yes',
+      'AuthenticationMethods publickey',
+      'Subsystem sftp internal-sftp'
+    ].join('\n') + '\n',
+    { mode: 0o600 }
+  )
+  const sshdPath = run('sh', ['-lc', 'command -v sshd'])
+  sshd = spawn(sshdPath, ['-D', '-e', '-f', join(scratch, 'sshd_config')], { stdio: 'ignore' })
+  await waitFor(async () => {
+    if (sshd.exitCode !== null) throw new Error('SSHD_EXITED')
+    return await new Promise((resolveCheck) => {
+      const socket = net.connect(port, '127.0.0.1')
+      socket.once('connect', () => {
+        socket.destroy()
+        resolveCheck(true)
+      })
+      socket.once('error', () => resolveCheck(false))
+    })
+  }, 8000)
+  database = initializeDatabase(
+    join(scratch, 'database'),
+    postgresEnabled ? 'controller' : 'desktop'
+  )
+  const now = new Date().toISOString()
+  database
+    .prepare(
+      `INSERT INTO vps
+    (id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret)
+    VALUES (1,?,'127.0.0.1',?,?,'root','key',X'00')`
+    )
+    .run(appName, port, pin)
+  database.prepare('INSERT INTO product_controller VALUES (?,?,?)').run(controller, now, 'active')
+  for (const [appId, name] of appNames) {
+    const appPort =
+      appId === 1 ? hostPort : environmentEnabled ? await reserveProductPort() : await reservePort()
+    const initialConfig =
+      environmentEnabled || postgresEnabled
+        ? canonicalH2Json({
+            framework,
+            host_port: appPort,
+            container_port: spa ? 80 : 3000,
+            healthcheck_path: framework === 'express' ? '/health' : '/',
+            needs_db: false
+          })
+        : configJson
+    const initialHash =
+      environmentEnabled || postgresEnabled
+        ? createHash('sha256').update(initialConfig).digest('hex')
+        : configHash
+    database
+      .prepare(
+        `INSERT INTO app
+    (id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root)
+    VALUES (?,1,?,?,?, ?,?,'git','https://example.test/r1.git','main','.')`
+      )
+      .run(
+        appId,
+        name,
+        framework,
+        appPort,
+        spa ? 80 : 3000,
+        framework === 'express' ? '/health' : '/'
+      )
+    database
+      .prepare(
+        `INSERT INTO product_source_config
+    (app_id,source_generation,repository_url,production_ref,repository_root,deploy_config_json,config_sha256,created_at)
+    VALUES (?,1,'https://example.test/r1.git','main','.',?,?,?)`
+      )
+      .run(appId, initialConfig, initialHash, now)
+    database
+      .prepare(
+        `INSERT INTO product_app_control
+    (app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at)
+    VALUES (?,'product',?,1,1,?,?)`
+      )
+      .run(appId, controller, initialHash, now)
+    run(
+      'python3',
+      [
+        '-c',
+        [
+          'from target_execution_guard import initialize_enrollment',
+          'from target_product_runtime import initialize_runtime_enrollment',
+          'import sys',
+          'initialize_enrollment(sys.argv[1],sys.argv[2],sys.argv[3],1)',
+          'initialize_runtime_enrollment(sys.argv[1],sys.argv[2],sys.argv[3],1,sys.stdin.buffer.read())'
+        ].join(';'),
+        join(state, `app-${appId}`),
+        controller,
+        String(appId)
+      ],
+      {
+        input: secret,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PYTHONPATH: helper, PYTHONDONTWRITEBYTECODE: '1' }
+      }
+    )
+  }
+  manager = new SshManager(() => ({
+    host: '127.0.0.1',
+    port,
+    hostFingerprint: pin,
+    username: 'root',
+    authType: 'key',
+    secret: readFileSync(join(scratch, 'client'), 'utf8')
+  }))
+  await manager.connect(1)
+  assert.ok(manager.getVerifiedHostKey(1))
+  const openChannel = manager.openGuardedExecutionChannelWithIdentity.bind(manager)
+  manager.openGuardedExecutionChannelWithIdentity = async (...args) => {
+    const opened = await openChannel(...args)
+    const write = opened.channel.write.bind(opened.channel)
+    opened.channel.write = (chunk, ...writeArgs) => {
+      // Observe only operation names; never retain payloads, source, env or secrets.
+      if (
+        Buffer.isBuffer(chunk) &&
+        chunk.length >= 4 &&
+        chunk.readUInt32BE(0) === chunk.length - 4
+      ) {
+        const frame = JSON.parse(chunk.subarray(4).toString('utf8'))
+        lastOperation = frame.operation
+        if (frame.operation === 'start_runtime_step') {
+          lastRuntimeStep = frame.step
+          console.log(JSON.stringify({ stage, step: lastRuntimeStep }))
+          if (restoreFailure && frame.step === 'rollback') {
+            const previous = inspect('container', `${appName}-app-previous-${frame.deployment_id}`)
+            assert.equal(previous.Config.Labels['opspilot.controller_id'], controller)
+            assert.equal(previous.Config.Labels['opspilot.app_id'], '1')
+            docker('rm', '-f', previous.Id)
+          }
+        }
+      }
+      return write(chunk, ...writeArgs)
+    }
+    return opened
+  }
+  const selectEnvironment = (appId, revision) => {
+    const owner = database.prepare('SELECT * FROM product_app_control WHERE app_id=?').get(appId)
+    const target = {
+      vps_id: 1,
+      host: '127.0.0.1',
+      port,
+      username: 'root',
+      auth_type: 'key',
+      host_fingerprint: pin,
+      ssh_security_revision: 1
+    }
+    const scope = { controller_id: controller, app_id: appId, ownership_generation: 1, target }
+    const vault = new ProductEnvironmentRepository(database, cipher)
+    vault.append({
+      scope,
+      expected_latest_revision: revision === 1 ? null : revision - 1,
+      expected_source_generation: owner.source_generation,
+      expected_source_config_sha256: owner.source_config_sha256,
+      values: { runtime_env: runtimeValues(revision), public_build_args: publicValues() }
+    })
+    new ProductEnvironmentSelection(database, cipher).select(
+      {
+        format: 1,
+        request_key: randomUUID(),
+        scope,
+        expected_source_generation: owner.source_generation,
+        expected_source_config_sha256: owner.source_config_sha256,
+        expected_latest_revision: revision,
+        environment_revision: revision
+      },
+      controller,
+      'unix:0'
+    )
+  }
+  if (environmentEnabled || postgresEnabled) {
+    database.exec(
+      "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit'"
+    )
+  }
+  if (postgresEnabled) {
+    if (environmentBeforeDatabase) for (const appId of appNames.keys()) selectEnvironment(appId, 1)
+    for (const appId of appNames.keys()) {
+      const owner = database.prepare('SELECT * FROM product_app_control WHERE app_id=?').get(appId),
+        scope = {
+          controller_id: controller,
+          app_id: appId,
+          ownership_generation: 1,
+          target: {
+            vps_id: 1,
+            host: '127.0.0.1',
+            port,
+            username: 'root',
+            auth_type: 'key',
+            host_fingerprint: pin,
+            ssh_security_revision: 1
+          }
+        },
+        request = {
+          format: 1,
+          request_key: randomUUID(),
+          scope,
+          expected_source_generation: owner.source_generation,
+          expected_source_config_sha256: owner.source_config_sha256
+        },
+        prepared = new ProductPostgresRepository(database, cipher).prepare(
+          request,
+          controller,
+          'unix:0'
+        )
+      new ProductPostgresSelection(database, cipher).select(
+        { ...request, request_key: randomUUID(), database_id: prepared.metadata.database_id },
+        controller,
+        'unix:0'
+      )
+      postgresResources.set(appId, prepared.metadata.database_id)
+    }
+  }
+  if (environmentEnabled && !environmentBeforeDatabase) {
+    for (const appId of appNames.keys()) {
+      selectEnvironment(appId, 1)
+    }
+  }
+  const verifyEnvironment = (revision) => {
+    const item = inspect('container', `${appName}-app`)
+    const actual = Object.fromEntries(
+      item.Config.Env.map((line) => {
+        const i = line.indexOf('=')
+        return [line.slice(0, i), line.slice(i + 1)]
+      })
+    )
+    for (const [key, value] of Object.entries(runtimeValues(revision)))
+      assert.equal(actual[key], value, 'RUNTIME_LITERAL_MISMATCH')
+    const marker = actual.OPSPILOT_CONFIG_REVISION.split(':')
+    assert.deepEqual(marker.slice(0, 3), [controller, '1', String(revision)])
+    assert.equal(
+      JSON.parse(
+        database
+          .prepare(
+            'SELECT deploy_config_json FROM product_source_config WHERE app_id=1 AND source_generation=?'
+          )
+          .get(Number(marker[3])).deploy_config_json
+      ).environment.revision,
+      revision
+    )
+    assert.ok(!Object.keys(publicValues()).some((key) => Object.hasOwn(actual, key)))
+    const image = inspect('image', item.Image)
+    const imageText = JSON.stringify(image)
+    for (const value of Object.values(runtimeValues(revision)).filter((v) => v.length > 3))
+      assert.ok(!imageText.includes(value), 'RUNTIME_VALUE_IN_IMAGE')
+  }
+  const deploys = new ProductDeployRepository(database)
+  const runtime = new ProductRuntimeRepository(database, { secret })
+  const options = {
+    vps_id: 1,
+    target_helper_path: join(
+      helper,
+      traceEnabled ? 'trace_helper.py' : 'target_guarded_ssh_helper.py'
+    ),
+    target_state_root: join(state, 'app-1'),
+    collector_directory: join(repo, 'collector'),
+    build_timeout_ms: 180000,
+    build_poll_interval_ms: 500,
+    runtime_poll_timeout_ms: 150000,
+    runtime_poll_interval_ms: 500
+  }
+  mkdirSync(source)
+  writeFileSync(
+    join(source, 'package.json'),
+    JSON.stringify(
+      next
+        ? {
+            name: 'r7e-next-fixture',
+            version: '1.0.0',
+            scripts: { build: 'next build', start: 'next start' },
+            dependencies: { next: '14.2.35', react: '18.3.1', 'react-dom': '18.3.1' }
+          }
+        : spa
+          ? {
+              name: 'r7b-vite-fixture',
+              version: '1.0.0',
+              scripts: { build: 'vite build' },
+              devDependencies: { vite: '5.4.11' }
+            }
+          : {
+              name: 'r1-express-fixture',
+              version: '1.0.0',
+              scripts: { start: 'node server.js' },
+              dependencies: { express: '4.21.2', ...(postgresEnabled ? { pg: '8.13.0' } : {}) }
+            }
+    )
+  )
+  run('npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'], {
+    cwd: source
+  })
+  if (next) {
+    if (postgresEnabled) {
+      const packageJson = JSON.parse(readFileSync(join(source, 'package.json')))
+      packageJson.dependencies.pg = '8.13.0'
+      writeFileSync(join(source, 'package.json'), JSON.stringify(packageJson))
+      run(
+        'npm',
+        ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'],
+        { cwd: source }
+      )
+    }
+    mkdirSync(join(source, 'pages'))
+    writeFileSync(join(source, 'next.config.js'), 'module.exports={experimental:{cpus:1}};\n')
+  }
+  run('git', ['init', '-q', source])
+  const deploy = async (
+    name,
+    statusCode = 200,
+    buildFails = false,
+    collectorDirectory,
+    appId = 1
+  ) => {
+    stage = name
+    console.log(JSON.stringify({ stage }))
+    const pkg = JSON.parse(readFileSync(join(source, 'package.json')))
+    pkg.scripts.postinstall = buildFails
+      ? 'node -e "process.exit(42)"'
+      : 'node -e "process.exit(0)"'
+    writeFileSync(join(source, 'package.json'), JSON.stringify(pkg))
+    writeFileSync(
+      join(source, 'server.js'),
+      postgresEnabled
+        ? `const express=require('express');const {Pool}=require('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});const app=express();app.get('/health',async(_,res)=>{try{await pool.query('SELECT 1');res.status(${statusCode}).send('${name}')}catch{res.status(503).send('database unavailable')}});app.get('/data',async(_,res)=>{try{res.json((await pool.query('SELECT count(*)::integer AS count FROM notes')).rows[0])}catch{res.status(503).send('database unavailable')}});app.get('/',(_,res)=>res.send('${name}'));app.listen(3000,'0.0.0.0');\n`
+        : `const express = require('express');\nconst app = express();\napp.get('/health', (_, res) => res.status(${statusCode}).send('${name}'));\napp.get('/', (_, res) => res.send('${name}'));\napp.listen(3000, '0.0.0.0');\n`
+    )
+    if (next) {
+      // SSR trả status thật để kiểm health/rollback, không giả response helper.
+      writeFileSync(
+        join(source, 'pages/index.js'),
+        postgresEnabled
+          ? `const {Pool}=require('pg');const pool=new Pool({connectionString:process.env.DATABASE_URL});export async function getServerSideProps({res}){try{await pool.query('SELECT 1');res.statusCode=${statusCode}}catch{res.statusCode=503}return{props:{}}}export default function Home(){return <main>${name}</main>};\n`
+          : `export function getServerSideProps({res}) {res.statusCode=${statusCode};return {props:{}}};export default function Home(){return <main>${name}</main>};\n`
+      )
+      if (environmentEnabled) {
+        mkdirSync(join(source, 'pages/api'), { recursive: true })
+        writeFileSync(
+          join(source, 'pages/api/public.js'),
+          'export default function handler(req,res){res.json({title:process.env.NEXT_PUBLIC_TITLE})}\n'
+        )
+      }
+    }
+    if (spa) {
+      // Artifact không đọc được: build thành công nhưng nginx403, buộc health/rollback thật.
+      pkg.scripts.build = 'vite build' + (statusCode !== 200 ? ' && chmod 000 dist/index.html' : '')
+      writeFileSync(join(source, 'package.json'), JSON.stringify(pkg))
+      writeFileSync(
+        join(source, 'index.html'),
+        '<html><body><main id="app"></main><script type="module" src="/main.js"></script></body></html>'
+      )
+      writeFileSync(
+        join(source, 'main.js'),
+        `document.getElementById('app').textContent = ${JSON.stringify(name)};` +
+          (environmentEnabled ? '\nconsole.info(import.meta.env.VITE_TITLE);' : '')
+      )
+    }
+    run('git', ['-C', source, 'add', '--', 'package.json', 'package-lock.json', 'server.js'])
+    if (spa) run('git', ['-C', source, 'add', '--', 'index.html', 'main.js'])
+    if (next) run('git', ['-C', source, 'add', '--', 'pages', 'next.config.js'])
+    run('git', [
+      '-C',
+      source,
+      '-c',
+      'user.name=OpsPilot Lab',
+      '-c',
+      'user.email=lab@example.invalid',
+      'commit',
+      '-qm',
+      name
+    ])
+    const sha = run('git', ['-C', source, 'rev-parse', 'HEAD'])
+    const job = `${controller}-${cases.length + 1}`
+    const timestamp = new Date().toISOString()
+    const owner = database
+      .prepare(
+        'SELECT source_generation,source_config_sha256 FROM product_app_control WHERE app_id=?'
+      )
+      .get(appId)
+    database
+      .prepare(
+        `INSERT INTO product_deploy_job
+      (job_id,controller_id,app_id,ownership_generation,source_generation,source_config_sha256,trigger,
+       idempotency_key,ref,target_sha,state,available_at,created_at,updated_at)
+      VALUES (?,?,?,1,?,?,'manual_redeploy',?,'main',?,'queued',?,?,?)`
+      )
+      .run(
+        job,
+        controller,
+        appId,
+        owner.source_generation,
+        owner.source_config_sha256,
+        `manual:${job}`,
+        sha,
+        timestamp,
+        timestamp,
+        timestamp
+      )
+    const claimed = deploys.claimNextJob(controller)
+    assert.equal(claimed.state, 'claimed')
+    const claim = claimed.claim
+    const metadata = {
+      repositoryUrl: 'https://example.test/r1.git',
+      repositoryRoot: '.',
+      commitSha: sha,
+      sourceConfigSha256: owner.source_config_sha256
+    }
+    assert.equal(deploys.markGitSnapshotVerified(claim, metadata).state, 'snapshot_verified')
+    heartbeat = setInterval(() => {
+      const result = deploys.heartbeatClaim(claim)
+      if (result.state !== 'renewed') console.log(JSON.stringify({ heartbeat: result.state }))
+    }, 5000)
+    const snapshot = {
+      claim,
+      metadata,
+      rootDirectory: source,
+      snapshotDirectory: source,
+      cleanup() {
+        return undefined
+      }
+    }
+    try {
+      const result = await executeProductDeployPipeline(
+        database,
+        runtime,
+        deploys,
+        manager,
+        snapshot,
+        {
+          ...options,
+          postgres: postgresEnabled
+            ? new ProductPostgresRuntime(database, deploys, cipher, claim, () =>
+                Buffer.from(secret)
+              )
+            : undefined,
+          environment: environmentEnabled
+            ? new ProductEnvironmentRuntime(database, deploys, cipher, claim, () =>
+                Buffer.from(secret)
+              )
+            : undefined,
+          target_state_root: join(state, `app-${appId}`),
+          ...(collectorDirectory ? { collector_directory: collectorDirectory } : {})
+        }
+      )
+      const terminal = runtime.getTerminal(claim.attempt_id)
+      assert.ok(terminal.settled_at)
+      assert.ok(terminal.leases_released_at)
+      assert.equal(
+        (
+          await recoverProductRuntimeSession(runtime, manager, snapshot, {
+            ...options,
+            target_state_root: join(state, `app-${appId}`)
+          })
+        ).state,
+        'already_settled'
+      )
+      assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [])
+      return { result, sha, claim }
+    } finally {
+      clearInterval(heartbeat)
+      heartbeat = null
+    }
+  }
+
+  const first = await deploy('first_healthy')
+  assert.equal(first.result.state, 'succeeded')
+  let current = inspect('container', `${appName}-app`)
+  assert.equal(current.Config.Labels['org.opencontainers.image.revision'], first.sha)
+  const metricPath = `/opt/opspilot/${appName}/metrics/metrics.jsonl`
+  await waitFor(
+    () => existsSync(metricPath) && readFileSync(metricPath, 'utf8').trim().length > 0,
+    30000
+  )
+  const rows = readFileSync(metricPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+  assert.equal(rows.at(-1).container_up, 1)
+  record('first_healthy', {
+    deployment_id: first.result.deployment_id,
+    sha: first.sha,
+    container_id: current.Id,
+    metric_rows: rows.length
+  })
+  if (spa) await verifySpaRoutes('first_healthy')
+  if (next) await verifyNextPage('first_healthy')
+  let postgresIdentity
+  const pgSql = (query) =>
+    run(
+      'docker',
+      [
+        'exec',
+        '-i',
+        '-u',
+        '0',
+        '-e',
+        'PGPASSFILE=/run/opspilot-secrets/app.pgpass',
+        postgresIdentity.container_id,
+        'psql',
+        '-X',
+        '--no-password',
+        '-h',
+        '127.0.0.1',
+        '-U',
+        'opspilot',
+        '-d',
+        'opspilot',
+        '-At',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-f',
+        '-'
+      ],
+      { input: query, stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+  const verifyPostgres = (result) => {
+    if (result.failed_step !== 'BUILD')
+      assert.deepEqual(result.terminal.envelope.receipt.database_runtime, postgresIdentity)
+    assert.equal(inspect('container', postgresIdentity.container_id).State.Running, true)
+    assert.equal(pgSql('SELECT count(*) FROM notes'), '1000')
+  }
+  if (postgresEnabled) {
+    postgresIdentity = first.result.terminal.envelope.receipt.database_runtime
+    assert.equal(postgresIdentity.database_id, postgresResources.get(1))
+    pgSql(
+      "CREATE TABLE notes(id integer PRIMARY KEY,title text NOT NULL); INSERT INTO notes SELECT i,'note-'||i FROM generate_series(1,1000) AS i;"
+    )
+    verifyPostgres(first.result)
+    await waitFor(
+      () =>
+        readFileSync(metricPath, 'utf8')
+          .trim()
+          .split('\n')
+          .some((line) => {
+            const sample = JSON.parse(line)
+            return typeof sample.db_response_ms === 'number' && sample.db_response_ms > 0
+          }),
+      30000
+    )
+    if (!next) {
+      const response = await fetch(`http://127.0.0.1:${hostPort}/data`)
+      assert.equal(response.status, 200, 'APP_DATABASE_ROUTE_UNAVAILABLE')
+      assert.deepEqual(await response.json(), { count: 1000 })
+    }
+    record('postgres_first_1000_rows_private_instance_and_collector_dsn', postgresIdentity)
+  }
+  if (environmentEnabled) {
+    verifyEnvironment(1)
+    selectEnvironment(1, 2)
+    record('environment_first_revision_and_selection', {
+      literal_values: true,
+      image_excludes_runtime: true,
+      selected_next_revision: 2
+    })
+  }
+
+  const second = await deploy('healthy_update')
+  assert.equal(second.result.state, 'succeeded')
+  current = inspect('container', `${appName}-app`)
+  assert.equal(current.Config.Labels['org.opencontainers.image.revision'], second.sha)
+  assert.equal(
+    database.prepare('SELECT current_deployment_id AS id FROM app WHERE id=1').get().id,
+    second.result.deployment_id
+  )
+  const collector = inspect('container', `${appName}-collector`)
+  record('healthy_update', {
+    deployment_id: second.result.deployment_id,
+    sha: second.sha,
+    container_id: current.Id,
+    activation: database
+      .prepare('SELECT state,stream_generation,start_offset FROM deployment_activation WHERE id=?')
+      .get(second.result.context.activation_id)
+  })
+  if (spa) await verifySpaRoutes('healthy_update')
+  if (next) await verifyNextPage('healthy_update')
+  if (postgresEnabled) {
+    verifyPostgres(second.result)
+    record('postgres_update_keeps_instance_volume_data', postgresIdentity)
+  }
+  if (environmentEnabled) {
+    verifyEnvironment(2)
+    docker('restart', current.Id)
+    await waitFor(async () => {
+      try {
+        return (await fetch(`http://127.0.0.1:${hostPort}`)).ok
+      } catch {
+        return false
+      }
+    }, 30000)
+    verifyEnvironment(2)
+    if (next)
+      assert.equal(
+        (await (await fetch(`http://127.0.0.1:${hostPort}/api/public`)).json()).title,
+        publicValue
+      )
+    if (spa) {
+      const html = await (await fetch(`http://127.0.0.1:${hostPort}`)).text()
+      const asset = html.match(/src="([^"]+\.js)"/)[1]
+      const js = await (await fetch(`http://127.0.0.1:${hostPort}${asset}`)).text()
+      assert.ok(js.includes('Public Sổ Đọc') && js.includes('$HOME'))
+    }
+    record('environment_update_restart_public_build', {
+      revision: 2,
+      literals_after_restart: true,
+      public_build: next || spa
+    })
+  }
+
+  const failedBuild = await deploy('build_failure', 200, true)
+  assert.equal(failedBuild.result.state, 'failed')
+  assert.equal(failedBuild.result.failed_step, 'BUILD')
+  assert.equal(inspect('container', `${appName}-app`).Id, current.Id)
+  assert.equal(inspect('container', `${appName}-collector`).Id, collector.Id)
+  assert.equal(inspect('container', collector.Id).State.Running, true)
+  record('build_failure', {
+    deployment_id: failedBuild.result.deployment_id,
+    previous_container_preserved: true,
+    previous_collector_preserved: true
+  })
+  if (environmentEnabled) verifyEnvironment(2)
+  if (postgresEnabled) {
+    verifyPostgres(failedBuild.result)
+    record('postgres_build_failure_keeps_database', postgresIdentity)
+  }
+
+  if (restoreFailure) {
+    await assert.rejects(
+      deploy('restore_failure', 503),
+      (error) => error.code === 'SSH_RUNTIME_UNKNOWN'
+    )
+    assert.equal(
+      database.prepare('SELECT current_deployment_id AS id FROM app WHERE id=1').get().id,
+      second.result.deployment_id
+    )
+    assert.equal(database.prepare('SELECT COUNT(*) AS n FROM product_runtime_terminal').get().n, 3)
+    assert.equal(
+      database
+        .prepare("SELECT COUNT(*) AS n FROM deployment_activation WHERE state='prepared'")
+        .get().n,
+      1
+    )
+    assert.equal(docker('ps', '-aq', '--filter', `name=^/${appName}-app$`), '')
+    assert.equal(
+      database
+        .prepare('SELECT COUNT(*) AS n FROM product_app_lease WHERE released_at IS NULL')
+        .get().n,
+      1
+    )
+    assert.equal(
+      database
+        .prepare('SELECT COUNT(*) AS n FROM product_worker_lease WHERE released_at IS NULL')
+        .get().n,
+      1
+    )
+    record('restore_failure_blocks_finalization', {
+      runtime_missing: true,
+      false_success_prevented: true,
+      leases_retained: true
+    })
+  } else {
+    if (environmentEnabled) selectEnvironment(1, 3)
+    const unhealthy = await deploy('unhealthy_rollback', 503)
+    assert.equal(unhealthy.result.state, 'rolled_back')
+    assert.equal(inspect('container', `${appName}-app`).Id, current.Id)
+    assert.equal(inspect('container', `${appName}-collector`).Id, collector.Id)
+    assert.equal(
+      database.prepare('SELECT current_deployment_id AS id FROM app WHERE id=1').get().id,
+      second.result.deployment_id
+    )
+    const candidateBoundary = database
+      .prepare('SELECT state,stream_generation,start_offset FROM deployment_activation WHERE id=?')
+      .get(unhealthy.result.context.activation_id)
+    const rollbackBoundary = unhealthy.result.terminal.envelope.receipt.boundary
+    assert.equal(candidateBoundary.state, 'aborted')
+    assert.equal(candidateBoundary.stream_generation, rollbackBoundary.generation)
+    assert.ok(rollbackBoundary.next_offset > candidateBoundary.start_offset)
+    assert.ok(Buffer.byteLength(readFileSync(metricPath)) + 1 >= rollbackBoundary.next_offset)
+    record('unhealthy_rollback', {
+      deployment_id: unhealthy.result.deployment_id,
+      previous_container_id: current.Id,
+      rollback_boundary: unhealthy.result.terminal.envelope.receipt.boundary
+    })
+    if (spa) await verifySpaRoutes('healthy_update')
+    if (next) await verifyNextPage('healthy_update')
+    if (postgresEnabled) {
+      verifyPostgres(unhealthy.result)
+      record('postgres_health_rollback_keeps_instance_volume_data', postgresIdentity)
+    }
+    if (environmentEnabled) {
+      verifyEnvironment(2)
+      record('environment_rollback_preserves_exact_config', {
+        revision: 2,
+        exact_container: true,
+        exact_collector: true
+      })
+      const auth = new ControllerClientAuth(database, controller, 'unix:0'),
+        grant = auth.enroll({
+          request_key: randomUUID(),
+          display_name: 'Private active exposure gate',
+          requested_scopes: ['read', 'policy:write']
+        })
+      assert.equal(grant.state, 'issued_once')
+      const authorization = 'Bearer ' + grant.credential.access_token,
+        exposure = new ControllerExposure(database, controller, () => true),
+        before = exposure.read(authorization, 1)
+      assert.deepEqual(before.source_state, {
+        active_generation: postgresEnabled ? 4 : 3,
+        desired_generation: postgresEnabled ? 5 : 4,
+        relation: 'pending'
+      })
+      assert.equal(before.deployment_id, second.result.deployment_id)
+      assert(before.context)
+      assert.equal(
+        (await fetch(`http://127.0.0.1:${hostPort}${framework === 'express' ? '/health' : '/'}`))
+          .status,
+        200
+      )
+      const terminalBefore = database.prepare('SELECT * FROM product_runtime_terminal').all(),
+        started = new Date().toISOString(),
+        recorded = exposure.record(authorization, randomUUID(), 1, {
+          deployment_id: before.context.deployment_id,
+          authority_sha256: before.context.authority_sha256,
+          previous_observation_id: before.context.previous_observation_id,
+          observer: 'desktop_external',
+          started_at: started,
+          checked_at: new Date().toISOString(),
+          outcome: 'reachable',
+          http_status: 200,
+          reason: 'none'
+        })
+      assert.equal(recorded.status, 'reachable')
+      assert.deepEqual(recorded.source_state, before.source_state)
+      assert.deepEqual(
+        database.prepare('SELECT * FROM product_runtime_terminal').all(),
+        terminalBefore
+      )
+      assert.equal(inspect('container', `${appName}-app`).Id, current.Id)
+      assert.equal(inspect('container', `${appName}-collector`).Id, collector.Id)
+      verifyEnvironment(2)
+      auth.revoke({ request_key: randomUUID(), client_id: grant.client.client_id })
+      record('environment_active_exposure_after_desired3_health_rollback', {
+        active_source: postgresEnabled ? 4 : 3,
+        desired_source: postgresEnabled ? 5 : 4,
+        current_deployment_id: second.result.deployment_id,
+        exposure_status: 'reachable',
+        exact_CIDs_and_env2: true,
+        signed_terminal_unchanged: true,
+        probe_scope: 'LOCAL_LOOPBACK_DOCKER',
+        independent_desktop_probe: false
+      })
+    }
+    const firstBuildFailure = await deploy('first_build_failure', 200, true, undefined, 2)
+    assert.equal(firstBuildFailure.result.state, 'failed')
+    assert.equal(firstBuildFailure.result.failed_step, 'BUILD')
+    assert.equal(
+      database.prepare('SELECT current_deployment_id AS id FROM app WHERE id=2').get().id,
+      null
+    )
+    record('first_build_failure', {
+      deployment_id: firstBuildFailure.result.deployment_id,
+      pointer: null
+    })
+    const firstHealthFailure = await deploy('first_health_failure', 503, false, undefined, 2)
+    assert.equal(firstHealthFailure.result.state, 'failed')
+    assert.equal(firstHealthFailure.result.failed_step, 'DEPLOY')
+    assert.equal(firstHealthFailure.result.terminal.envelope.receipt.active_runtime, null)
+    assert.equal(
+      database.prepare('SELECT current_deployment_id AS id FROM app WHERE id=2').get().id,
+      null
+    )
+    record('first_health_failure', {
+      deployment_id: firstHealthFailure.result.deployment_id,
+      rollback_forged: false
+    })
+    const brokenCollector = join(scratch, 'broken-collector')
+    cpSync(join(repo, 'collector'), brokenCollector, { recursive: true })
+    writeFileSync(join(brokenCollector, 'Dockerfile'), 'FROM python:3.12-alpine\nRUN exit 42\n')
+    const terminalsBeforeFailure = database
+      .prepare('SELECT COUNT(*) AS n FROM product_runtime_terminal')
+      .get().n
+    await assert.rejects(
+      deploy('collector_build_failure', 200, false, brokenCollector),
+      (error) => error.code === 'SSH_RUNTIME_UNKNOWN'
+    )
+    assert.equal(inspect('container', `${appName}-app`).Id, current.Id)
+    assert.equal(inspect('container', collector.Id).State.Running, true)
+    assert.equal(
+      database.prepare('SELECT current_deployment_id AS id FROM app WHERE id=1').get().id,
+      second.result.deployment_id
+    )
+    assert.equal(
+      database.prepare('SELECT COUNT(*) AS n FROM product_runtime_terminal').get().n,
+      terminalsBeforeFailure
+    )
+    assert.equal(
+      database
+        .prepare("SELECT COUNT(*) AS n FROM deployment_activation WHERE state='prepared'")
+        .get().n,
+      1
+    )
+    assert.equal(
+      database
+        .prepare('SELECT COUNT(*) AS n FROM product_app_lease WHERE released_at IS NULL')
+        .get().n,
+      1
+    )
+    record('collector_build_failure_blocks_finalization', {
+      previous_runtime_preserved: true,
+      collector_still_running: true,
+      leases_retained: true
+    })
+  }
+} catch (error) {
+  // Logs/SSH output can contain arbitrary values. Report stable code and phase only.
+  failure = {
+    stage,
+    code: typeof error?.code === 'string' ? error.code : (error?.name ?? 'LAB_FAILED'),
+    frames: [
+      ...String(error?.stack ?? '').matchAll(/([A-Za-z0-9_.-]+\.(?:mjs|ts|cjs)):(\d+):(\d+)/g)
+    ].map((m) => ({ file: m[1], line: Number(m[2]), column: Number(m[3]) })),
+    operation: lastOperation,
+    runtime_step: lastRuntimeStep,
+    deployments: database?.prepare('SELECT id,status FROM deployment').all(),
+    activations: database
+      ?.prepare('SELECT id,deployment_id,state FROM deployment_activation')
+      .all(),
+    target_trace: existsSync(join(helper, 'trace.jsonl'))
+      ? readFileSync(join(helper, 'trace.jsonl'), 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line))
+      : []
+  }
+  console.log(JSON.stringify({ status: 'FAIL', ...failure }))
+} finally {
+  clearInterval(heartbeat)
+  clearTimeout(deadline)
+  await manager?.disconnectAll()
+  if (sshd) {
+    sshd.kill('SIGTERM')
+    await waitFor(() => sshd.exitCode !== null, 5000).catch(() => {
+      sshd.kill('SIGKILL')
+      cleanup = false
+    })
+  }
+  if (database) {
+    await database.backup(join(output, 'evidence.sqlite'))
+    for (const [appId, name] of appNames) {
+      const metricFile = `/opt/opspilot/${name}/metrics/metrics.jsonl`
+      if (existsSync(metricFile)) cpSync(metricFile, join(output, `app-${appId}-metrics.jsonl`))
+    }
+  }
+  closeDatabase()
+  try {
+    // Enumerate exact namespace, then validate Product identity before each removal.
+    const ids = docker('ps', '-aq', '--no-trunc', '--filter', `name=^/${appName}-`)
+      .split('\n')
+      .filter(Boolean)
+    for (const id of ids) {
+      const item = inspect('container', id)
+      assert.ok(item.Name.startsWith(`/${appName}-`))
+      assert.ok(appNames.has(Number(item.Config.Labels['opspilot.app_id'])))
+      assert.equal(item.Config.Labels['opspilot.controller_id'], controller)
+      docker('rm', '-f', id)
+    }
+    for (const [appId, databaseId] of postgresResources) {
+      const pgName = 'opspilot-pg-' + databaseId,
+        pgIds = docker('ps', '-aq', '--no-trunc', '--filter', 'name=^/' + pgName + '$')
+      if (pgIds) {
+        const pg = inspect('container', pgIds)
+        assert.equal(pg.Config.Labels['opspilot.controller_id'], controller)
+        assert.equal(pg.Config.Labels['opspilot.app_id'], String(appId))
+        assert.equal(pg.Config.Labels['opspilot.database_id'], databaseId)
+        docker('rm', '-f', pgIds)
+      }
+      const volume = pgName + '-data'
+      if (docker('volume', 'ls', '--filter', `name=^${volume}$`, '--format', '{{.Name}}')) {
+        assert.equal(inspect('volume', volume).Labels['opspilot.controller_id'], controller)
+        assert.equal(inspect('volume', volume).Labels['opspilot.database_id'], databaseId)
+        docker('volume', 'rm', volume)
+      }
+    }
+    for (const tag of docker('image', 'ls', '--format', '{{.Repository}}:{{.Tag}}')
+      .split('\n')
+      .filter((tag) =>
+        [...appNames.values()].some(
+          (name) => tag.startsWith(`${name}:`) || tag.startsWith(`${name}-collector:`)
+        )
+      )) {
+      const image = inspect('image', tag)
+      assert.ok(appNames.has(Number(image.Config.Labels['opspilot.app_id'])))
+      docker('image', 'rm', tag)
+    }
+    for (const name of appNames.values()) {
+      const network = `${name}-network`
+      if (docker('network', 'ls', '--filter', `name=^${network}$`, '--format', '{{.Name}}')) {
+        assert.equal(inspect('network', network).Labels['opspilot.controller_id'], controller)
+        docker('network', 'rm', network)
+      }
+      const metrics = `/opt/opspilot/${name}`
+      if (existsSync(metrics)) {
+        assert.equal(realpathSync(metrics), metrics)
+        assert.match(appName, /^r1-[a-f0-9]{12}$/)
+        rmSync(metrics, { recursive: true })
+      }
+    }
+    assert.equal(docker('ps', '-aq', '--filter', `name=^/${appName}-`), '')
+  } catch {
+    cleanup = false
+  }
+  secret.fill(0)
+  assert.equal(dirname(realpathSync(scratch)), realpathSync(tmpdir()))
+  rmSync(scratch, { recursive: true })
+  // Checkpoint completion must never overwrite an earlier global lab deadline.
+  if (deadlineExpired) failure = { ...failure, stage, code: 'LAB_DEADLINE' }
+  const report = {
+    status: failure ? 'FAIL' : cleanup ? 'PASS' : 'FAIL',
+    scope: 'PINNED_SSH_SQLITE_DOCKER_RUNTIME',
+    framework,
+    environment_enabled: environmentEnabled,
+    postgres_enabled: postgresEnabled,
+    environment_before_database: environmentBeforeDatabase,
+    nonce,
+    source_sha: run('git', ['-c', `safe.directory=${repo}`, '-C', repo, 'rev-parse', 'HEAD']),
+    subject_sha256: subjectHashes,
+    bundle_sha256: bundleHash,
+    driver_sha256: driverHash,
+    deadline_expired: deadlineExpired,
+    subject_unchanged: subjectFiles.every(
+      (file) =>
+        createHash('sha256')
+          .update(readFileSync(join(repo, 'app/src/main/controlPlane', file)))
+          .digest('hex') === subjectHashes[file]
+    ),
+    cases,
+    failure,
+    cleanup
+  }
+  writeFileSync(join(output, 'result.json'), JSON.stringify(report, null, 2) + '\n')
+  console.log(JSON.stringify(report))
+  process.exitCode = failure || !cleanup ? 1 : 0
+}
+
+async function waitFor(check, timeout) {
+  const until = Date.now() + timeout
+  while (Date.now() < until) {
+    if (await check()) return
+    await delay(100)
+  }
+  throw new Error('LAB_WAIT_TIMEOUT')
+}
+
+async function verifyNextPage(marker) {
+  const origin = `http://127.0.0.1:${hostPort}`
+  const home = await fetch(origin + '/')
+  assert.equal(home.status, 200)
+  const html = await home.text()
+  assert(html.includes(marker))
+  const asset = html.match(/src="([^"]+\.js)"/)?.[1]
+  assert(asset?.startsWith('/_next/'))
+  assert.equal((await fetch(origin + asset)).status, 200)
+  assert.equal((await fetch(origin + '/_next/static/missing-r7e.js')).status, 404)
+  record('next_ssr_' + stage, {
+    ssr_marker: marker,
+    html_sha256: createHash('sha256').update(html).digest('hex'),
+    next_asset_200: true,
+    missing_asset_404: true
+  })
+}
+
+async function verifySpaRoutes(marker) {
+  const origin = `http://127.0.0.1:${hostPort}`
+  const home = await fetch(origin + '/')
+  assert.equal(home.status, 200)
+  const html = await home.text()
+  const deep = await fetch(origin + '/projects/current/settings')
+  assert.equal(deep.status, 200)
+  assert.equal(await deep.text(), html)
+  const asset = html.match(/src="([^"]+\.js)"/)?.[1]
+  assert.ok(asset?.startsWith('/assets/'))
+  const js = await fetch(origin + asset)
+  assert.equal(js.status, 200)
+  assert.ok((await js.text()).includes(marker))
+  assert.equal((await fetch(origin + '/assets/not-present.js')).status, 404)
+  assert.equal((await fetch(origin + '/not-present.css')).status, 404)
+  record('spa_routes_' + stage, {
+    html_sha256: createHash('sha256').update(html).digest('hex'),
+    deep_link_matches_index: true,
+    missing_assets_404: true
+  })
+}
+
+function reservePort() {
+  return new Promise((resolvePort, reject) => {
+    const server = net.createServer()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      server.close((error) => (error ? reject(error) : resolvePort(address.port)))
+    })
+  })
+}
+async function reserveProductPort() {
+  const start = randomBytes(2).readUInt16BE() % 1000
+  for (let offset = 0; offset < 1000; offset++) {
+    const port = 30000 + ((start + offset) % 1000)
+    const available = await new Promise((done) => {
+      const server = net.createServer()
+      server.once('error', () => done(false))
+      server.listen(port, '127.0.0.1', () => server.close(() => done(true)))
+    })
+    if (available) return port
+  }
+  throw Error('PRODUCT_LAB_PORT_RANGE_UNAVAILABLE')
+}

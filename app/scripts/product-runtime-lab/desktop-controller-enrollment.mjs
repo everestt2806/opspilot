@@ -1,0 +1,1147 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone Linux SSH/CLI/cold SQLite integration lab. */
+import assert from 'node:assert/strict'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { execFileSync, spawn } from 'node:child_process'
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  cpSync,
+  copyFileSync,
+  chmodSync,
+  chownSync,
+  lstatSync,
+  existsSync,
+  readdirSync,
+  realpathSync
+} from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join, resolve } from 'node:path'
+import { createServer } from 'node:http'
+import { connect } from 'node:net'
+
+if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
+const artifact = process.env.OPSPILOT_R1_ARTIFACT,
+  controllerArtifact = process.env.OPSPILOT_CONTROLLER_ARTIFACT
+if (!artifact || !controllerArtifact) throw new Error('ENROLLMENT_LAB_ENV_REQUIRED')
+const require = createRequire(artifact),
+  api = require(artifact)
+if (process.argv.includes('--cold')) {
+  let input = ''
+  for await (const chunk of process.stdin) {
+    input += chunk
+    if (input.length > 8192) throw new Error('LAB_INPUT_LIMIT')
+  }
+  const request = JSON.parse(input),
+    db = api.initializeDatabase(request.directory)
+  const cipher = new api.AesGcmCredentialCipher(Buffer.from(request.key, 'base64')),
+    vault = new api.DesktopControllerVault(db, cipher),
+    ssh = new api.SshManager(() => ({
+      ...vault.resolve(request.binding_id).principal,
+      secret: request.ssh_secret
+    }))
+  try {
+    if (request.target_key) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({
+          status: 'PASS',
+          registration: await service.sendTarget({
+            request_key: request.target_key,
+            confirm_transfer: true
+          })
+        }) + '\n'
+      )
+    } else if (request.command_key) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({
+          status: 'PASS',
+          command: await service.checkCommand(request.command_key)
+        }) + '\n'
+      )
+    } else if (request.target_root) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({
+          status: 'PASS',
+          target: await service.enrollProjectTarget({
+            request_key: request.setup_key,
+            target_root: request.target_root
+          })
+        }) + '\n'
+      )
+    } else if (request.setup_key) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({ status: 'PASS', setup: await service.sendProject(request.setup_key) }) +
+          '\n'
+      )
+    } else {
+      const client = new api.ControllerHttpClient(ssh, () => vault.resolve(request.binding_id))
+      const dto = await client.call('identity', {})
+      assert.equal(dto.state, 'response_received')
+      process.stdout.write(
+        JSON.stringify({ status: 'PASS', controller_id: dto.response.controller_id }) + '\n'
+      )
+    }
+  } catch (error) {
+    process.stdout.write(
+      JSON.stringify({
+        status: 'BLOCKED',
+        code: /^[A-Z_]{1,80}$/.test(error.code) ? error.code : 'UNEXPECTED'
+      }) + '\n'
+    )
+  } finally {
+    await ssh.disconnectAll()
+    api.closeDatabase()
+  }
+  process.exit(0)
+}
+const { Server, utils } = require('ssh2'),
+  Database = require('better-sqlite3'),
+  nonce = randomBytes(6).toString('hex'),
+  install = mkdtempSync('/var/tmp/opspilot-desktop-enroll-'),
+  data = join(install, 'controller-data'),
+  local = join(install, 'desktop'),
+  output = resolve(import.meta.dirname, '../../.out-scripts/desktop-controller-enrollment', nonce)
+mkdirSync(output, { recursive: true })
+mkdirSync(data, { mode: 0o700 })
+mkdirSync(local, { mode: 0o700 })
+cpSync(dirname(controllerArtifact), join(install, 'payload'), { recursive: true })
+cpSync(join(dirname(controllerArtifact), '../node_modules'), join(install, 'node_modules'), {
+  recursive: true,
+  dereference: false
+})
+copyFileSync(process.execPath, join(install, 'node'))
+assert.equal(lstatSync(join(install, 'node')).isSymbolicLink(), false)
+assert.notEqual(lstatSync(join(install, 'node')).ino, lstatSync(process.execPath).ino)
+chownSync(join(install, 'node'), process.getuid(), process.getgid())
+chmodSync(join(install, 'node'), 0o700)
+const cli = join(install, 'payload/control-plane.cjs'),
+  pin = createHash('sha256')
+    .update(readFileSync(join(install, 'payload/bundle-manifest.json')))
+    .digest('hex')
+execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(install, 'host-key')], {
+  stdio: 'ignore',
+  timeout: 10000
+})
+const hostKey = readFileSync(join(install, 'host-key')),
+  hostPin =
+    'SHA256:' +
+    createHash('sha256')
+      .update(utils.parseKey(hostKey).getPublicSSH())
+      .digest('base64')
+      .replace(/=+$/, ''),
+  password = randomBytes(32).toString('base64url'),
+  masterKey = randomBytes(32),
+  cases = [],
+  connections = new Set(),
+  children = new Set(),
+  firstDeploy = process.argv.includes('--first-deploy'),
+  appName = `wizard-api-${nonce}`
+let controllerProcess,
+  runtimeControllerId,
+  runtimeAppId,
+  runtimeProof,
+  runtimeReadiness,
+  credentialProbe
+let observedCatalogSize,
+  serverApi,
+  remote,
+  manager,
+  result,
+  discardReply = false,
+  discardProjectReply = false,
+  discardTargetReply = false,
+  discardDeployReply = false,
+  discardVpsReply = false
+const http = createServer((req, res) => {
+  if (!serverApi.handle(req, res)) {
+    res.writeHead(404)
+    res.end()
+  }
+})
+const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
+  connections.add(connection)
+  connection.on('error', () => {})
+  connection.once('close', () => connections.delete(connection))
+  connection.on('authentication', (ctx) =>
+    ctx.method === 'password' && ctx.username === 'root' && ctx.password === password
+      ? ctx.accept()
+      : ctx.reject()
+  )
+  connection.on('ready', () => {
+    connection.on('session', (accept) => {
+      const session = accept()
+      session.on('exec', (acceptExec, rejectExec, info) => {
+        if (
+          !info.command.startsWith('python3 -B -u -c ') &&
+          !(
+            firstDeploy &&
+            info.command.startsWith(`python3 -B -u '${install}/runtime-target/`) &&
+            /^python3 -B -u '[A-Za-z0-9/_.-]+target_guarded_ssh_helper\.py'$/.test(info.command)
+          )
+        ) {
+          rejectExec()
+          return
+        }
+        const channel = acceptExec()
+        let drop = discardReply,
+          incoming = ''
+        discardReply = false
+        const child = spawn('/bin/sh', ['-c', info.command], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          detached: true
+        })
+        children.add(child)
+        child.on('error', () => channel.close())
+        child.stdin.on('error', () => {})
+        channel.on('error', () => {})
+        channel.pipe(child.stdin)
+        channel.on('data', (chunk) => {
+          if (incoming.length + chunk.length <= 2 * 1024 * 1024) incoming += chunk
+        })
+        child.stdout.on('data', (chunk) => {
+          if (discardTargetReply) {
+            try {
+              const packet = JSON.parse(incoming)
+              if (
+                packet.operation === 'enroll' &&
+                packet.payload?.purpose === 'product-target-enrollment'
+              ) {
+                drop = true
+                discardTargetReply = false
+              }
+            } catch {
+              /* Đợi packet đầy đủ trong giới hạn lab. */
+            }
+          }
+          if (discardVpsReply) {
+            try {
+              if (JSON.parse(incoming).operation === 'register-vps') {
+                drop = true
+                discardVpsReply = false
+              }
+            } catch {
+              /* Wait for the complete fixture request. */
+            }
+          }
+          if (discardProjectReply) {
+            try {
+              if (JSON.parse(incoming).operation === 'register-project') {
+                drop = true
+                discardProjectReply = false
+              }
+            } catch {
+              /* Wait for complete request. */
+            }
+          }
+          if (!drop) channel.write(chunk)
+        })
+        child.stderr.resume()
+        child.once('close', (code) => {
+          children.delete(child)
+          channel.exit(drop ? 1 : (code ?? 1))
+          channel.end()
+        })
+        channel.once('close', () => {
+          if (child.exitCode === null) {
+            try {
+              process.kill(-child.pid, 'SIGTERM')
+            } catch {
+              /* Already stopped. */
+            }
+          }
+        })
+      })
+    })
+    connection.on('tcpip', (accept, reject, info) => {
+      if (info.destIP !== '127.0.0.1' || info.destPort !== 8768) {
+        reject()
+        return
+      }
+      const channel = accept(),
+        target = connect({ host: info.destIP, port: info.destPort })
+      channel.on('error', () => target.destroy())
+      target.on('error', () => channel.destroy())
+      channel.once('close', () => target.destroy())
+      target.once('close', () => channel.destroy())
+      let drop = false
+      channel.on('data', (chunk) => {
+        if (
+          discardDeployReply &&
+          /^POST \/v1\/controllers\/[^ /]+\/apps\/[0-9]+\/redeploy /.test(chunk.toString('ascii'))
+        ) {
+          drop = true
+          discardDeployReply = false
+        }
+      })
+      target.on('data', (chunk) => {
+        if (drop) {
+          target.destroy()
+          channel.destroy()
+        } else channel.write(chunk)
+      })
+      channel.pipe(target)
+    })
+  })
+})
+const cold = (bindingId, setupKey, targetRoot, commandKey, targetKey) =>
+  new Promise((resolveChild, rejectChild) => {
+    const child = spawn(process.execPath, [import.meta.filename, '--cold'], {
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    let text = '',
+      overflow = false
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      rejectChild(new Error('COLD_PROCESS_TIMEOUT'))
+    }, 25000)
+    child.stdout.on('data', (chunk) => {
+      if (text.length + chunk.length > 8192) overflow = true
+      else text += chunk
+    })
+    child.stderr.resume()
+    child.once('error', () => {
+      clearTimeout(timer)
+      rejectChild(new Error('COLD_PROCESS_FAILED'))
+    })
+    child.once('close', (code) => {
+      clearTimeout(timer)
+      if (code !== 0 || overflow) {
+        rejectChild(new Error('COLD_PROCESS_FAILED'))
+        return
+      }
+      try {
+        resolveChild(JSON.parse(text))
+      } catch {
+        rejectChild(new Error('COLD_PROCESS_INVALID'))
+      }
+    })
+    child.stdin.end(
+      JSON.stringify({
+        directory: local,
+        key: masterKey.toString('base64'),
+        binding_id: bindingId,
+        ssh_secret: password,
+        setup_key: setupKey,
+        target_root: targetRoot,
+        command_key: commandKey,
+        target_key: targetKey
+      })
+    )
+  })
+try {
+  const initialized = api.initializeController(data),
+    controller = initialized.controllerId
+  execFileSync(join(install, 'node'), [cli, 'secrets-init', '--data-dir', data], {
+    stdio: 'pipe',
+    timeout: 10000
+  })
+  remote = new Database(join(data, 'opspilot.db'))
+  remote.pragma('foreign_keys=ON')
+  serverApi = new api.ControllerReadApi(
+    remote,
+    controller,
+    data,
+    new api.ControllerReadCursor(new api.AesGcmCredentialCipher(randomBytes(32)), controller),
+    () => ({ service_state: 'ready', last_branch_poll_at: null, reason_code: null }),
+    { commands: new api.ControllerCommands(remote, controller, () => true) }
+  )
+  await new Promise((resolveListen, rejectListen) => {
+    http.once('error', rejectListen)
+    http.listen(8768, '127.0.0.1', resolveListen)
+  })
+  await new Promise((resolveListen) => ssh.listen(0, '127.0.0.1', resolveListen))
+  const db = api.initializeDatabase(local),
+    cipher = new api.AesGcmCredentialCipher(masterKey),
+    vault = new api.DesktopControllerVault(db, cipher),
+    principal = {
+      vpsId: 1,
+      host: '127.0.0.1',
+      port: ssh.address().port,
+      hostFingerprint: hostPin,
+      username: 'root',
+      authType: 'password'
+    }
+  db.prepare(
+    "INSERT INTO vps(id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret) VALUES(1,'native-controller',?,?,?,?,?,X'0102')"
+  ).run(
+    principal.host,
+    principal.port,
+    principal.hostFingerprint,
+    principal.username,
+    principal.authType
+  )
+  manager = new api.SshManager(() => ({ ...principal, secret: password }))
+  const enrollment = new api.DesktopControllerEnrollment(vault, {
+      openProductBootstrapChannel: (vpsId, script, options) => {
+        const line = script.text.split('\n').find((value) => value.startsWith('APPROVED_ASSETS = '))
+        observedCatalogSize = JSON.parse(line.slice('APPROVED_ASSETS = '.length)).length
+        return manager.openProductBootstrapChannel(vpsId, script, options)
+      }
+    }),
+    intent = {
+      binding_id: randomUUID(),
+      controller_id: controller,
+      vps_id: 1,
+      ssh_security_revision: 1,
+      principal,
+      artifact_path: cli,
+      data_directory: data,
+      node_path: join(install, 'node'),
+      manifest_sha256: pin,
+      display_name: 'Native Desktop',
+      requested_scopes: ['read', 'deploy:manual', 'policy:write']
+    }
+  vault.prepare(intent)
+  const enrolled = await enrollment.enroll(intent.binding_id)
+  assert.equal(enrolled.state, 'active')
+  assert.equal(enrolled.remote_client_id, enrolled.client.client_id)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 1)
+  cases.push('actual_pinned_ssh_verified_payload_and_admin_cli_enrollment')
+  const token = vault.resolve(intent.binding_id).accessToken
+  assert.equal(
+    JSON.stringify(db.prepare('SELECT * FROM desktop_controller_binding').all()).includes(token),
+    false
+  )
+  assert.equal(JSON.stringify(enrolled).includes(token), false)
+  cases.push('encrypted_local_bearer_and_public_metadata_only')
+  assert.deepEqual(await cold(intent.binding_id), { status: 'PASS', controller_id: controller })
+  cases.push('new_node_process_cold_sqlite_decrypt_to_authenticated_http')
+  assert.deepEqual(await enrollment.enroll(intent.binding_id), enrolled)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 1)
+  cases.push('active_enrollment_replay_does_not_issue_another_client')
+  const wrongPin = { ...intent, binding_id: randomUUID(), manifest_sha256: '0'.repeat(64) }
+  vault.prepare(wrongPin)
+  await assert.rejects(enrollment.enroll(wrongPin.binding_id), {
+    code: 'CONTROLLER_BUNDLE_VERIFICATION_FAILED'
+  })
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 1)
+  cases.push('wrong_manifest_pin_rejected_before_cli_credential_issue')
+  const original = readFileSync(cli)
+  try {
+    writeFileSync(
+      cli,
+      Buffer.concat([original, Buffer.from('\nthrow new Error("UNVERIFIED_CODE_EXECUTED");\n')])
+    )
+    const changed = { ...intent, binding_id: randomUUID() }
+    vault.prepare(changed)
+    await assert.rejects(enrollment.enroll(changed.binding_id), {
+      code: 'CONTROLLER_BUNDLE_VERIFICATION_FAILED'
+    })
+    assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 1)
+  } finally {
+    writeFileSync(cli, original)
+  }
+  cases.push('modified_candidate_never_executes_to_verify_itself')
+  const foreign = { ...intent, binding_id: randomUUID(), controller_id: 'foreign-controller' }
+  vault.prepare(foreign)
+  await assert.rejects(enrollment.enroll(foreign.binding_id), {
+    code: 'CONTROLLER_IDENTITY_MISMATCH'
+  })
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 1)
+  cases.push('actual_controller_identity_mismatch_prevents_enrollment')
+  const lost = { ...intent, binding_id: randomUUID(), display_name: 'Lost delivery fixture' }
+  vault.prepare(lost)
+  discardReply = true
+  await assert.rejects(enrollment.enroll(lost.binding_id), { code: 'CONTROLLER_ADMIN_FAILED' })
+  assert.equal(vault.get(lost.binding_id).state, 'delivery_unknown')
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 2)
+  const replay = await enrollment.enroll(lost.binding_id)
+  assert.equal(replay.state, 'delivery_unknown')
+  assert.ok(replay.remote_client_id)
+  assert.equal(replay.client, null)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 2)
+  assert.throws(() => vault.resolve(lost.binding_id), { code: 'BINDING_UNAVAILABLE' })
+  cases.push('lost_secret_delivery_replay_keeps_uuid_and_single_remote_grant')
+  discardReply = true
+  await assert.rejects(enrollment.revoke(lost.binding_id), { code: 'CONTROLLER_ADMIN_FAILED' })
+  assert.ok(
+    remote
+      .prepare('SELECT revoked_at FROM product_desktop_client WHERE client_id=?')
+      .get(replay.remote_client_id).revoked_at
+  )
+  const revokedLost = await enrollment.revoke(lost.binding_id)
+  assert.equal(revokedLost.state, 'disabled')
+  assert.equal(
+    remote
+      .prepare(
+        "SELECT count(*) AS n FROM product_desktop_admin_request WHERE operation='revoke-desktop-client' AND client_id=?"
+      )
+      .get(replay.remote_client_id).n,
+    1
+  )
+  cases.push('lost_revoke_response_retries_stable_admin_key_and_disables_local_binding')
+  execFileSync(join(install, 'node'), [cli, 'revoke-desktop-client', '--data-dir', data], {
+    input: JSON.stringify({ request_key: randomUUID(), client_id: enrolled.remote_client_id }),
+    stdio: ['pipe', 'pipe', 'pipe'],
+    timeout: 10000
+  })
+  assert.deepEqual(await cold(intent.binding_id), { status: 'BLOCKED', code: 'CLIENT_REVOKED' })
+  cases.push('remote_revoke_blocks_cold_desktop_http_immediately')
+  db.exec('UPDATE vps SET ssh_security_revision=ssh_security_revision+1 WHERE id=1')
+  assert.throws(() => vault.resolve(intent.binding_id), { code: 'BINDING_UNAVAILABLE' })
+  cases.push('local_ssh_security_revision_change_blocks_old_binding')
+  const uiService = new api.DesktopControllerService(db, cipher, manager)
+  const uiInput = {
+    binding_id: randomUUID(),
+    controller_id: controller,
+    vps_id: 1,
+    artifact_path: cli,
+    data_directory: data,
+    node_path: join(install, 'node'),
+    manifest_sha256: pin,
+    display_name: 'UI read-only connection'
+  }
+  const uiBinding = await uiService.register(uiInput)
+  assert.equal(uiBinding.state, 'active')
+  assert.deepEqual(
+    JSON.parse(
+      remote
+        .prepare('SELECT scopes_json FROM product_desktop_client WHERE client_id=?')
+        .get(uiBinding.remote_client_id).scopes_json
+    ),
+    ['read']
+  )
+  const uiSnapshot = await uiService.apps({ binding_id: uiBinding.binding_id })
+  assert.deepEqual(uiSnapshot.items, [])
+  assert.equal(uiSnapshot.controller_id, controller)
+  assert.equal(uiSnapshot.service_state, 'ready')
+  assert.equal(JSON.stringify(uiSnapshot).includes(token), false)
+  await assert.rejects(
+    uiService.projectTargets({ binding_id: uiBinding.binding_id }),
+    (error) =>
+      error.code === 'VALIDATION' && error.context?.cause?.message === 'PROJECT_SCOPE_REQUIRED'
+  )
+  assert.equal((await uiService.revoke(uiBinding.binding_id)).state, 'disabled')
+  cases.push('ui_service_actual_register_read_only_http_snapshot_and_revoke')
+  const writeInput = {
+    ...uiInput,
+    binding_id: randomUUID(),
+    display_name: 'UI explicit write connection',
+    allow_write: true
+  }
+  const writeBinding = await uiService.register(writeInput)
+  assert.deepEqual(writeBinding.scopes, ['read', 'deploy:manual', 'policy:write'])
+  assert.deepEqual(
+    JSON.parse(
+      remote
+        .prepare('SELECT scopes_json FROM product_desktop_client WHERE client_id=?')
+        .get(writeBinding.remote_client_id).scopes_json
+    ),
+    writeBinding.scopes
+  )
+  cases.push('ui_opt_in_actual_ssh_admin_grants_exact_write_scopes')
+  const configHash = createHash('sha256').update('{}').digest('hex'),
+    setupAt = new Date().toISOString()
+  const localCredential = cipher.encrypt(password)
+  db.prepare(
+    "INSERT INTO vps(id,name,host,port,username,auth_type,host_fingerprint,crypto_scheme,encrypted_secret,iv,auth_tag) VALUES(5,'native-target',?,?,?,'password',?,'aes_256_gcm',?,?,?)"
+  ).run(
+    principal.host,
+    principal.port,
+    principal.username,
+    principal.hostFingerprint,
+    localCredential.encrypted_secret,
+    localCredential.iv,
+    localCredential.auth_tag
+  )
+  const targetReview = await uiService.prepareTarget({
+    binding_id: writeBinding.binding_id,
+    local_vps_id: 5
+  })
+  assert.equal(targetReview.state, 'prepared')
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 0)
+  await assert.rejects(
+    uiService.sendTarget({ request_key: targetReview.request_key, confirm_transfer: false })
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 0)
+  cases.push('desktop_local_target_review_persists_uuid_without_transfer_and_requires_consent')
+  remote.exec(
+    "CREATE TRIGGER lab_receipt_failure BEFORE INSERT ON product_vps_registration BEGIN SELECT RAISE(ABORT,'LAB_RECEIPT_FAILURE'); END"
+  )
+  await assert.rejects(
+    uiService.sendTarget({ request_key: targetReview.request_key, confirm_transfer: true })
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 0)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_vps_registration').get().n, 0)
+  remote.exec('DROP TRIGGER lab_receipt_failure')
+  cases.push('actual_registration_receipt_failure_rolls_back_vps_and_encrypted_credential')
+  discardVpsReply = true
+  await assert.rejects(
+    uiService.sendTarget({ request_key: targetReview.request_key, confirm_transfer: true })
+  )
+  assert.equal(discardVpsReply, false)
+  assert.equal(
+    (await uiService.listTargetSetups(writeBinding.binding_id))[0].state,
+    'outcome_unknown'
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 1)
+  const encryptedBefore = remote
+    .prepare('SELECT encrypted_secret,iv,auth_tag FROM vps WHERE id=1')
+    .get()
+  const coldRegistration = await cold(
+    writeBinding.binding_id,
+    undefined,
+    undefined,
+    undefined,
+    targetReview.request_key
+  )
+  assert.equal(coldRegistration.status, 'PASS')
+  assert.equal(coldRegistration.registration.state, 'registered')
+  assert.equal(coldRegistration.registration.remote_vps_id, 1)
+  assert.deepEqual(
+    remote.prepare('SELECT encrypted_secret,iv,auth_tag FROM vps WHERE id=1').get(),
+    encryptedBefore
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_vps_registration').get().n, 1)
+  assert.equal(
+    JSON.stringify(db.prepare('SELECT * FROM desktop_target_setup').all()).includes(password),
+    false
+  )
+  assert.equal(
+    JSON.stringify(remote.prepare('SELECT * FROM product_vps_registration').all()).includes(
+      password
+    ),
+    false
+  )
+  assert.equal(encryptedBefore.encrypted_secret.toString().includes(password), false)
+  const actualCredential = api.createControllerSshResolver(remote, controller, data)(1)
+  assert.equal(actualCredential.secret, password)
+  cases.push(
+    'actual_verified_ssh_registration_lost_reply_cold_retry_same_uuid_one_vps_unchanged_ciphertext'
+  )
+  const otherLocalCredential = cipher.encrypt(password + 'changed')
+  db.prepare(
+    'UPDATE vps SET encrypted_secret=?,iv=?,auth_tag=?,ssh_security_revision=ssh_security_revision+1 WHERE id=5'
+  ).run(
+    otherLocalCredential.encrypted_secret,
+    otherLocalCredential.iv,
+    otherLocalCredential.auth_tag
+  )
+  const conflictReview = await uiService.prepareTarget({
+    binding_id: writeBinding.binding_id,
+    local_vps_id: 5
+  })
+  await assert.rejects(
+    uiService.sendTarget({ request_key: conflictReview.request_key, confirm_transfer: true }),
+    (error) => error.context?.cause?.message === 'CONTROLLER_VPS_ENROLLMENT_CONFLICT'
+  )
+  assert.deepEqual(
+    remote.prepare('SELECT encrypted_secret,iv,auth_tag FROM vps WHERE id=1').get(),
+    encryptedBefore
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 1)
+  cases.push('actual_different_credential_conflict_never_overwrites_registered_target')
+  let untrustedTargetAuth = 0
+  credentialProbe = new Server({ hostKeys: [hostKey] }, (connection) => {
+    connections.add(connection)
+    connection.on('error', () => {})
+    connection.once('close', () => connections.delete(connection))
+    connection.on('authentication', (ctx) => {
+      untrustedTargetAuth++
+      ctx.reject()
+    })
+  })
+  await new Promise((done) => credentialProbe.listen(0, '127.0.0.1', done))
+  db.prepare(
+    "INSERT INTO vps(id,name,host,port,username,auth_type,host_fingerprint,crypto_scheme,encrypted_secret,iv,auth_tag) VALUES(7,'wrong-pin-target','127.0.0.1',?,'root','password',?,'aes_256_gcm',?,?,?)"
+  ).run(
+    credentialProbe.address().port,
+    'SHA256:' + 'C'.repeat(43),
+    localCredential.encrypted_secret,
+    localCredential.iv,
+    localCredential.auth_tag
+  )
+  const pinReview = await uiService.prepareTarget({
+    binding_id: writeBinding.binding_id,
+    local_vps_id: 7
+  })
+  await assert.rejects(
+    uiService.sendTarget({ request_key: pinReview.request_key, confirm_transfer: true }),
+    (error) => error.context?.cause?.message === 'CONTROLLER_VPS_SSH_VERIFICATION_FAILED'
+  )
+  assert.equal(untrustedTargetAuth, 0)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 1)
+  cases.push(
+    'actual_wrong_target_fingerprint_rejected_before_authentication_and_without_vps_record'
+  )
+
+  remote
+    .prepare(
+      "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root) VALUES(1,1,'ui-app','express',30001,3000,'git','https://github.com/demo/app.git','main','.')"
+    )
+    .run()
+  remote
+    .prepare(
+      "INSERT INTO product_source_config VALUES(1,1,'https://github.com/demo/app.git','main','.','{}',?,?)"
+    )
+    .run(configHash, setupAt)
+  remote
+    .prepare(
+      "INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at,auto_deploy_paused,pause_reason,pause_policy_provenance) VALUES(1,'product',?,1,1,?,?,1,'operator','explicit')"
+    )
+    .run(controller, configHash, setupAt)
+  new api.ProductDeployRepository(remote).observeTip({
+    controllerId: controller,
+    appId: 1,
+    ownershipGeneration: 1,
+    sourceGeneration: 1,
+    configSha256: configHash,
+    ref: 'main',
+    expectedObservationSequence: null,
+    tipSha: 'a'.repeat(40)
+  })
+  const writeSnapshot = await uiService.apps({ binding_id: writeBinding.binding_id })
+  assert.equal(writeSnapshot.items[0].ownership_generation, 1)
+  assert.equal(writeSnapshot.capabilities.redeploy, 'available')
+  const command = await uiService.prepareCommand({
+    binding_id: writeBinding.binding_id,
+    app_id: 1,
+    expected_ownership_generation: 1,
+    expected_source_generation: 1,
+    operation: 'redeploy',
+    target: { kind: 'specific_sha', sha: 'a'.repeat(40) }
+  })
+  const sent = await uiService.sendCommand(command.request_key)
+  assert.equal(sent.state, 'accepted')
+  const appStatus = await uiService.appStatus({ binding_id: writeBinding.binding_id, app_id: 1 })
+  assert.equal(appStatus.latest_job_state, 'queued')
+  assert.equal(appStatus.current_deployment_state, null)
+  assert.equal((await uiService.checkCommand(command.request_key)).job_id, sent.job_id)
+  cases.push('ui_service_generations_capabilities_exact_sha_journal_and_remote_queued_status')
+  const targetPage = await uiService.projectTargets({ binding_id: writeBinding.binding_id })
+  assert.equal(targetPage.items[0].id, 1)
+  assert.equal(targetPage.items[0].ssh_security_revision, 1)
+  assert.equal(JSON.stringify(targetPage).includes(password), false)
+  cases.push('desktop_verified_admin_lists_only_remote_controller_target_metadata')
+  const setup = await uiService.prepareProject({
+    binding_id: writeBinding.binding_id,
+    target_vps_id: 1,
+    app_name: appName,
+    framework: 'express',
+    repository_url: 'https://github.com/everestt2806/opspilot.git',
+    production_ref: 'feat/release-audit-20261204',
+    repository_root: 'demo-apps/san-nha-booking',
+    host_port: null,
+    container_port: 3000,
+    healthcheck_path: '/health'
+  })
+  assert.equal(setup.state, 'prepared')
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM app WHERE name=?').get(appName).n, 0)
+  discardProjectReply = true
+  await assert.rejects(uiService.sendProject(setup.request_key))
+  assert.equal((await uiService.listProjects(writeBinding.binding_id))[0].state, 'outcome_unknown')
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM app WHERE name=?').get(appName).n, 1)
+  cases.push('desktop_setup_persists_uuid_before_verified_admin_create_and_lost_reply')
+  const coldSetup = await cold(writeBinding.binding_id, setup.request_key)
+  assert.equal(coldSetup.status, 'PASS')
+  assert.equal(coldSetup.setup.state, 'registered')
+  assert.equal(coldSetup.setup.request_key, setup.request_key)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM app WHERE name=?').get(appName).n, 1)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_project_registration').get().n, 1)
+  assert.equal(
+    remote
+      .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+      .get(coldSetup.setup.app_id).n,
+    0
+  )
+  cases.push('cold_desktop_setup_retry_same_admin_key_one_registered_app_no_deploy')
+  const verifiedSource = await uiService.verifyProjectSource(setup.request_key)
+  assert.equal(verifiedSource.state, 'source_verified')
+  assert.match(verifiedSource.commit_sha, /^[a-f0-9]{40}$/)
+  assert.equal(verifiedSource.app_id, coldSetup.setup.app_id)
+  assert.equal(verifiedSource.binding_revision, writeBinding.revision)
+  assert.equal(verifiedSource.repository_root, 'demo-apps/san-nha-booking')
+  assert.equal(verifiedSource.deployment_started, false)
+  assert.equal(verifiedSource.runtime_preflight, 'required')
+  assert.equal(verifiedSource.auto_deploy_paused, true)
+  assert.equal(JSON.stringify(verifiedSource).includes(password), false)
+  assert.equal(
+    remote
+      .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+      .get(verifiedSource.app_id).n,
+    0
+  )
+  assert.equal(
+    remote.prepare('SELECT count(*) AS n FROM deployment WHERE app_id=?').get(verifiedSource.app_id)
+      .n,
+    0
+  )
+  cases.push(
+    'desktop_service_verified_ssh_admin_actual_public_git_source_full_sha_without_runtime_dispatch'
+  )
+  const verifiedAgain = await uiService.verifyProjectSource(setup.request_key)
+  assert.equal(verifiedAgain.commit_sha, verifiedSource.commit_sha)
+  assert.equal(verifiedAgain.observation_sequence, verifiedSource.observation_sequence)
+  cases.push('desktop_source_recheck_same_observation_and_no_implicit_deployment')
+  const targetRoot = join(install, 'runtime-target')
+  const targetInitial = await uiService.projectTargetState(setup.request_key)
+  assert.equal(targetInitial.state, 'not_prepared')
+  assert.equal(targetInitial.proof, 'not_available')
+  assert.equal(existsSync(targetRoot), false)
+  assert.equal(
+    remote
+      .prepare('SELECT COUNT(*) AS n FROM product_target_enrollment WHERE app_id=?')
+      .get(verifiedSource.app_id).n,
+    0
+  )
+  cases.push('desktop_read_target_state_is_metadata_only_without_key_or_target_creation')
+  discardTargetReply = true
+  const targetUnknown = await uiService.enrollProjectTarget({
+    request_key: setup.request_key,
+    target_root: targetRoot
+  })
+  assert.equal(discardTargetReply, false)
+  assert.equal(targetUnknown.state, 'unknown')
+  assert.equal(targetUnknown.proof, 'not_available')
+  assert.equal(existsSync(targetRoot), true)
+  const snapshotTarget = () => {
+    const entries = []
+    const walk = (directory) => {
+      for (const entry of readdirSync(directory)) {
+        const path = join(directory, entry),
+          stat = lstatSync(path)
+        assert.equal(stat.isSymbolicLink(), false)
+        if (stat.isDirectory()) walk(path)
+        else
+          entries.push([
+            path.slice(targetRoot.length),
+            stat.ino,
+            stat.mtimeMs,
+            createHash('sha256').update(readFileSync(path)).digest('hex')
+          ])
+      }
+    }
+    walk(targetRoot)
+    return entries
+  }
+  const installedBefore = snapshotTarget()
+  assert.ok(installedBefore.length >= 6)
+  cases.push('real_target_installed_before_lost_bootstrap_reply_keeps_controller_unknown')
+  const recoveredTarget = await cold(writeBinding.binding_id, setup.request_key, targetRoot)
+  assert.equal(recoveredTarget.status, 'PASS')
+  assert.equal(recoveredTarget.target.state, 'enrolled')
+  assert.equal(recoveredTarget.target.proof, 'persisted_verified')
+  assert.equal(recoveredTarget.target.deployment_started, false)
+  assert.equal(recoveredTarget.target.runtime_preflight, 'required')
+  assert.deepEqual(snapshotTarget(), installedBefore)
+  const targetRead = await uiService.projectTargetState(setup.request_key)
+  assert.equal(targetRead.state, 'enrolled')
+  assert.equal(targetRead.target_root, targetRoot)
+  assert.equal(
+    remote.prepare('SELECT COUNT(*) AS n FROM deployment WHERE app_id=?').get(verifiedSource.app_id)
+      .n,
+    0
+  )
+  cases.push(
+    'cold_desktop_unknown_target_uses_inspect_same_files_keys_and_hmac_proof_without_deployment'
+  )
+  await assert.rejects(
+    uiService.enrollProjectTarget({
+      request_key: setup.request_key,
+      target_root: join(install, 'other-root')
+    }),
+    (error) => error.context?.cause?.message === 'PROJECT_TARGET_CONFLICT'
+  )
+  assert.equal(existsSync(join(install, 'other-root')), false)
+  cases.push('reviewed_target_root_cannot_replace_existing_enrollment_or_create_another_install')
+  if (firstDeploy) {
+    runtimeControllerId = controller
+    runtimeAppId = verifiedSource.app_id
+    assert.equal(existsSync(`/opt/opspilot/${appName}`), false)
+    execFileSync('docker', ['info', '--format', '{{.ServerVersion}}'], {
+      stdio: 'pipe',
+      timeout: 10000
+    })
+    remote
+      .prepare("UPDATE product_deploy_job SET state='cancelled' WHERE app_id=1 AND state='queued'")
+      .run()
+    remote
+      .prepare("UPDATE product_app_control SET mode='desktop',controller_id=NULL WHERE app_id=1")
+      .run()
+    await serverApi.close()
+    serverApi = undefined
+    http.closeAllConnections()
+    await new Promise((done) => http.close(done))
+    controllerProcess = spawn(join(install, 'node'), [cli, 'run-product', '--data-dir', data], {
+      stdio: ['pipe', 'ignore', 'ignore']
+    })
+    controllerProcess.stdin.end(JSON.stringify({ format: 1, artifact: cli, manifest_sha256: pin }))
+    const waitFor = async (check, ms = 120000) => {
+      const end = Date.now() + ms
+      while (Date.now() < end) {
+        if (controllerProcess.exitCode !== null) throw new Error('LAB_CONTROLLER_EXIT')
+        try {
+          if (await check()) return
+        } catch {
+          /* Wait for the isolated lab service. */
+        }
+        await new Promise((done) => setTimeout(done, 250))
+      }
+      throw new Error('LAB_RUNTIME_TIMEOUT')
+    }
+    await waitFor(async () => {
+      const snapshot = await uiService.apps({ binding_id: writeBinding.binding_id })
+      return snapshot.service_state === 'ready' && snapshot.capabilities.redeploy === 'available'
+    }, 30000)
+    const readiness = await uiService.projectReadiness(setup.request_key)
+    runtimeReadiness = readiness
+    assert.equal(
+      readiness.state,
+      'ready',
+      JSON.stringify({ state: readiness.state, report: readiness.report })
+    )
+    assert.equal(readiness.report.deployment_started, false)
+    assert.equal(
+      readiness.report.checks.every((row) => row.state === 'passed'),
+      true
+    )
+    assert.equal(
+      remote.prepare('SELECT count(*) AS n FROM deployment WHERE app_id=?').get(runtimeAppId).n,
+      0
+    )
+    assert.equal(
+      remote
+        .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+        .get(runtimeAppId).n,
+      0
+    )
+    cases.push('desktop_readiness_actual_git_hmac_resources_docker_port_without_runtime_writes')
+    const firstInput = { request_key: setup.request_key, readiness_id: readiness.readiness_id }
+    const plan = await uiService.prepareFirstDeployment(firstInput)
+    assert.equal(plan.source_sha, readiness.report.commit_sha)
+    assert.equal(plan.command.state, 'prepared')
+    await assert.rejects(uiService.sendCommand(plan.command.request_key))
+    assert.equal(
+      remote
+        .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+        .get(runtimeAppId).n,
+      0
+    )
+    cases.push('main_first_deploy_review_persisted_uuid_generic_send_cannot_bypass_receipt')
+    discardDeployReply = true
+    const unknown = await uiService.sendFirstDeployment({
+      ...firstInput,
+      command_key: plan.command.request_key
+    })
+    assert.equal(unknown.state, 'outcome_unknown')
+    assert.equal(discardDeployReply, false)
+    const recovered = await cold(
+      writeBinding.binding_id,
+      undefined,
+      undefined,
+      plan.command.request_key
+    )
+    assert.equal(recovered.status, 'PASS')
+    const queued = recovered.command
+    assert.equal(queued.state, 'accepted')
+    cases.push('lost_first_deploy_http_reply_cold_desktop_looks_up_same_key_without_post_replay')
+    assert.equal(queued.target_sha, plan.source_sha)
+    assert.equal(
+      (
+        await uiService.sendFirstDeployment({
+          ...firstInput,
+          command_key: plan.command.request_key
+        })
+      ).job_id,
+      queued.job_id
+    )
+    await waitFor(async () => {
+      const row = remote
+        .prepare('SELECT state FROM product_deploy_job WHERE job_id=?')
+        .get(queued.job_id)
+      if (['failed', 'uncertain', 'rolled_back', 'cancelled', 'superseded'].includes(row?.state))
+        throw new Error('LAB_RUNTIME_NOT_SUCCEEDED')
+      return row?.state === 'succeeded'
+    }, 240000)
+    const final = await uiService.appStatus({
+      binding_id: writeBinding.binding_id,
+      app_id: runtimeAppId
+    })
+    assert.equal(final.latest_job_id, queued.job_id)
+    assert.equal(final.latest_job_state, 'succeeded')
+    assert.equal(final.current_deployment_sha, plan.source_sha)
+    assert.equal(final.current_deployment_state, 'running')
+    assert.equal((await uiService.checkCommand(plan.command.request_key)).remote_state, 'completed')
+    const health = await fetch(`http://127.0.0.1:${coldSetup.setup.host_port}/health`)
+    assert.equal(health.ok, true)
+    assert.equal(
+      remote
+        .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+        .get(runtimeAppId).n,
+      1
+    )
+    assert.equal(
+      remote
+        .prepare('SELECT auto_deploy_paused FROM product_app_control WHERE app_id=?')
+        .get(runtimeAppId).auto_deploy_paused,
+      1
+    )
+    cases.push('actual_first_deployment_exact_sha_build_activate_health_publish_finalize_one_job')
+    runtimeProof = {
+      job_id: queued.job_id,
+      deployment_id: final.current_deployment_id,
+      sha: plan.source_sha,
+      health_status: health.status,
+      host_port: coldSetup.setup.host_port,
+      auto_deploy_paused: true
+    }
+    controllerProcess.kill('SIGTERM')
+    await new Promise((done) => controllerProcess.once('close', done))
+    controllerProcess = undefined
+  }
+  const unsupported = await uiService.prepareProject({
+    binding_id: writeBinding.binding_id,
+    target_vps_id: 1,
+    app_name: 'unsupported-api',
+    framework: 'express',
+    repository_url: 'https://github.com/everestt2806/opspilot.git',
+    production_ref: 'feat/release-audit-20261204',
+    repository_root: 'demo-apps/express-api',
+    host_port: null,
+    container_port: 3000,
+    healthcheck_path: '/health'
+  })
+  await uiService.sendProject(unsupported.request_key)
+  await assert.rejects(
+    uiService.verifyProjectSource(unsupported.request_key),
+    (error) =>
+      error.context?.cause?.message === 'PROJECT_SOURCE_UNSUPPORTED' &&
+      !String(error).includes(password)
+  )
+  cases.push('native_admin_helper_forwards_only_allowlisted_source_rejection_code')
+  assert.equal((await uiService.revoke(writeBinding.binding_id)).state, 'disabled')
+  assert.deepEqual(db.pragma('foreign_key_check'), [])
+  assert.deepEqual(remote.pragma('foreign_key_check'), [])
+  cases.push('native_migration024_and_foreign_key_integrity')
+  result = {
+    status: 'PASS',
+    nonce,
+    scope: 'DESKTOP_PINNED_SSH_CLI_ENROLLMENT_COLD_VAULT_HTTP',
+    passed: cases.length,
+    cases,
+    manifest_sha256: pin,
+    artifact_sha256: createHash('sha256').update(readFileSync(artifact)).digest('hex'),
+    credential_fixture_key_in_stdin_only: true,
+    electron_safe_storage_ui_exercised: false,
+    runtime_dispatch_executed: firstDeploy,
+    runtime_proof: runtimeProof,
+    production_vps_used: false
+  }
+} catch (error) {
+  result = {
+    status: 'FAIL',
+    nonce,
+    passed: cases.length,
+    cases,
+    code: /^[A-Z_]{1,80}$/.test(error.code) ? error.code : error.name,
+    readiness: runtimeReadiness,
+    runtime_jobs: firstDeploy
+      ? remote?.prepare('SELECT app_id,state FROM product_deploy_job').all()
+      : undefined,
+    runtime_attempts: firstDeploy
+      ? remote?.prepare('SELECT remote_outcome FROM product_deploy_attempt').all()
+      : undefined,
+    approved_catalog_size: observedCatalogSize,
+    public_install_metadata: [
+      install,
+      join(install, 'payload'),
+      cli,
+      join(install, 'node'),
+      data
+    ].map((path) => {
+      const s = lstatSync(path)
+      return {
+        role:
+          path === install
+            ? 'install'
+            : path === cli
+              ? 'artifact'
+              : path === data
+                ? 'data'
+                : path.endsWith('/node')
+                  ? 'node'
+                  : 'payload',
+        uid: s.uid,
+        mode: (s.mode & 0o7777).toString(8),
+        symlink: s.isSymbolicLink()
+      }
+    }),
+    assertion_location:
+      error.stack?.match(/desktop-controller-enrollment\.mjs:\d+:\d+/)?.[0] ?? null
+  }
+} finally {
+  if (controllerProcess) {
+    controllerProcess.kill('SIGTERM')
+    await new Promise((done) => {
+      controllerProcess.once('close', done)
+      setTimeout(() => {
+        controllerProcess.kill('SIGKILL')
+        done()
+      }, 5000).unref()
+    })
+  }
+  await manager?.disconnectAll()
+  for (const connection of connections) connection.end()
+  for (const child of children) {
+    try {
+      process.kill(-child.pid, 'SIGTERM')
+    } catch {
+      /* Already stopped. */
+    }
+  }
+  await new Promise((resolveClose) => ssh.close(resolveClose))
+  if (credentialProbe) await new Promise((done) => credentialProbe.close(done))
+  await serverApi?.close()
+  http.closeAllConnections()
+  if (http.listening) await new Promise((resolveClose) => http.close(resolveClose))
+  if (firstDeploy) {
+    const docker = (...args) =>
+      execFileSync('docker', args, { encoding: 'utf8', timeout: 30000 }).trim()
+    const inspect = (kind, id) => JSON.parse(docker(kind, 'inspect', id))[0]
+    for (const id of docker('ps', '-aq', '--filter', `name=^/${appName}-`)
+      .split('\n')
+      .filter(Boolean)) {
+      const item = inspect('container', id)
+      assert.ok(item.Name.startsWith(`/${appName}-`))
+      assert.equal(item.Config.Labels['opspilot.controller_id'], runtimeControllerId)
+      assert.equal(item.Config.Labels['opspilot.app_id'], String(runtimeAppId))
+      docker('rm', '-f', id)
+    }
+    for (const tag of docker('image', 'ls', '--format', '{{.Repository}}:{{.Tag}}')
+      .split('\n')
+      .filter((tag) => tag.startsWith(`${appName}:`) || tag.startsWith(`${appName}-collector:`))) {
+      assert.equal(inspect('image', tag).Config.Labels['opspilot.app_id'], String(runtimeAppId))
+      docker('image', 'rm', tag)
+    }
+    const network = `${appName}-network`
+    if (docker('network', 'ls', '--filter', `name=^${network}$`, '--format', '{{.Name}}')) {
+      assert.equal(
+        inspect('network', network).Labels['opspilot.controller_id'],
+        runtimeControllerId
+      )
+      docker('network', 'rm', network)
+    }
+    const runtime = `/opt/opspilot/${appName}`
+    if (existsSync(runtime)) {
+      assert.match(appName, /^wizard-api-[a-f0-9]{12}$/)
+      assert.equal(realpathSync(runtime), runtime)
+      rmSync(runtime, { recursive: true })
+    }
+  }
+  remote?.close()
+  api.closeDatabase()
+  assert.equal(resolve(install), install)
+  assert.match(install, /^\/var\/tmp\/opspilot-desktop-enroll-[A-Za-z0-9]+$/)
+  rmSync(install, { recursive: true })
+  if (result) result.cleanup = true
+}
+writeFileSync(join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n')
+console.log(JSON.stringify(result))
+process.exitCode = result.status === 'PASS' ? 0 : 1

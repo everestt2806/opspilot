@@ -1,0 +1,2 @@
+id,scenario,repeat_index,attempt_index,deployment_id,vps_id,baseline_start_ts,train_at_ts,fault_start_ts,fault_end_ts,run_end_ts,clock_offset_ms,detection_grace_s,train_sample_count,fault_params_json,status,abort_reason
+31,cpu_spike,9,1,42,2,2026-11-22T17:34:02.649736Z,2026-11-22T18:04:04.084868Z,2026-11-22T18:19:05.628036Z,2026-11-22T18:39:05.628036Z,2026-11-22T18:49:16.698318Z,348,60,176,,completed,

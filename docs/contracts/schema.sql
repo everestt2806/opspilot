@@ -10,6 +10,15 @@
 --   - 007_git_source_provenance.sql (nguồn Git và commit deploy)
 --   - 008_vps_archive.sql (gỡ VPS an toàn và nối lại app/lịch sử)
 --   - 019_vps_ssh_security_revision.sql (revision bảo mật SSH monotonic, tách khỏi telemetry)
+--   - 021_product_target_enrollment.sql (durable target enrollment/proof, không auto-enroll)
+--   - 029_desktop_controller_installation.sql (durable installation authority/journal)
+--   - 030_desktop_controller_upgrade.sql (chỉ Desktop: upgrade intent/authority)
+--   - 031_desktop_controller_authority_rebind.sql (chỉ Desktop: explicit SSH authority epochs)
+--   - 032_product_environment_revision.sql (staged encrypted Product config)
+--   - 033_product_environment_request.sql (receipt staged config mã hóa, idempotency)
+--   - 034_desktop_environment_intent.sql (chỉ Desktop: encrypted config retry intent)
+--   - 035_product_source_environment.sql (source generation → encrypted env revision)
+-- Controller role áp dụng001–029/032–033/035; không áp dụng030/031/034 hoặc copy DB để phục hồi schema.
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'
@@ -896,3 +905,735 @@ CREATE TABLE product_runtime_terminal (
          (settled_at IS NOT NULL AND settlement_json IS NOT NULL)),
   CHECK (leases_released_at IS NULL OR settled_at IS NOT NULL)
 );
+
+-- Proof cài target riêng với deployment; không thay ownership hoặc tự bật policy.
+CREATE TABLE product_target_enrollment (
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  ownership_generation INTEGER NOT NULL CHECK (ownership_generation >= 1),
+  target_binding_json TEXT NOT NULL,
+  manifest_sha256 TEXT NOT NULL CHECK (length(manifest_sha256)=64),
+  target_root TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('prepared','unknown','enrolled')),
+  revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+  receipt_json TEXT,
+  last_error_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (controller_id,app_id,ownership_generation),
+  CHECK (state <> 'enrolled' OR receipt_json IS NOT NULL)
+);
+
+-- Credential giao qua trusted admin CLI một lần; DB chỉ giữ digest, không bearer plaintext.
+CREATE TABLE product_desktop_client (
+  client_id TEXT PRIMARY KEY,
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  display_name TEXT NOT NULL,
+  scopes_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE INDEX idx_product_desktop_client_controller ON product_desktop_client(controller_id,client_id);
+
+CREATE TABLE product_desktop_credential (
+  credential_id TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL REFERENCES product_desktop_client(client_id) ON DELETE RESTRICT,
+  token_sha256 TEXT NOT NULL UNIQUE CHECK (length(token_sha256)=64 AND token_sha256 NOT GLOB '*[^0-9a-f]*'),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE INDEX idx_product_desktop_credential_client ON product_desktop_credential(client_id);
+
+-- Tombstone giữ theo controller lifetime; cùng key không cấp lại secret sau response loss.
+CREATE TABLE product_desktop_admin_request (
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  administrator_identity TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('enroll-desktop-client','revoke-desktop-client')),
+  body_sha256 TEXT NOT NULL CHECK (length(body_sha256)=64),
+  client_id TEXT NOT NULL REFERENCES product_desktop_client(client_id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL,
+  result_json TEXT,
+  PRIMARY KEY (controller_id,administrator_identity,request_key)
+);
+
+-- Client phải thuộc controller của request; token không nằm trong bảng này.
+CREATE UNIQUE INDEX idx_product_desktop_client_identity ON product_desktop_client(controller_id,client_id);
+CREATE TABLE product_api_request (
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  client_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  action TEXT NOT NULL CHECK (action IN ('manual_redeploy','pause_auto_deploy','resume_auto_deploy')),
+  ownership_generation INTEGER NOT NULL CHECK (ownership_generation>=1),
+  source_generation INTEGER NOT NULL CHECK (source_generation>=1),
+  body_sha256 TEXT NOT NULL CHECK (length(body_sha256)=64 AND body_sha256 NOT GLOB '*[^0-9a-f]*'),
+  job_id TEXT REFERENCES product_deploy_job(job_id) ON DELETE RESTRICT,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (controller_id,client_id,request_key),
+  FOREIGN KEY(controller_id,client_id) REFERENCES product_desktop_client(controller_id,client_id) ON DELETE RESTRICT,
+  CHECK ((action='manual_redeploy' AND job_id IS NOT NULL) OR (action<>'manual_redeploy' AND job_id IS NULL))
+);
+
+-- Kho của Desktop; remote controller_id không FK tới product_controller cục bộ.
+CREATE TABLE desktop_controller_binding (
+  binding_id TEXT PRIMARY KEY NOT NULL,
+  controller_id TEXT NOT NULL,
+  vps_id INTEGER NOT NULL REFERENCES vps(id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL CHECK (revision>=1),
+  state TEXT NOT NULL CHECK (state IN ('pending','active','delivery_unknown','disabled')),
+  intent_json TEXT NOT NULL,
+  remote_client_id TEXT,
+  client_json TEXT,
+  encrypted_secret BLOB,
+  iv BLOB,
+  auth_tag BLOB,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK ((state='active' AND remote_client_id IS NOT NULL AND client_json IS NOT NULL AND encrypted_secret IS NOT NULL
+    AND typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 16384
+    AND iv IS NOT NULL AND typeof(iv)='blob' AND length(iv)=12
+    AND auth_tag IS NOT NULL AND typeof(auth_tag)='blob' AND length(auth_tag)=16)
+    OR (state<>'active' AND encrypted_secret IS NULL AND iv IS NULL AND auth_tag IS NULL))
+);
+CREATE INDEX idx_desktop_controller_binding_vps ON desktop_controller_binding(vps_id,state);
+
+-- Migration 025: Desktop command journal
+-- Nhật ký ý định Desktop; không FK tới binding/VPS để giữ tombstone khi xóa profile.
+CREATE TABLE desktop_controller_command (
+  request_key TEXT PRIMARY KEY NOT NULL,
+  binding_id TEXT NOT NULL,
+  controller_id TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  binding_revision INTEGER NOT NULL CHECK (binding_revision>=1),
+  app_id INTEGER NOT NULL CHECK (app_id>=1),
+  operation TEXT NOT NULL CHECK (operation IN ('redeploy','policy')),
+  body_json TEXT NOT NULL CHECK (length(body_json) BETWEEN 1 AND 2048),
+  body_sha256 TEXT NOT NULL CHECK (length(body_sha256)=64),
+  state TEXT NOT NULL CHECK (state IN ('prepared','in_flight','outcome_unknown','accepted','rejected','cancelled')),
+  reason_code TEXT,
+  remote_state TEXT CHECK (remote_state IN ('accepted','completed','blocked','uncertain')),
+  job_id TEXT,
+  target_sha TEXT CHECK (target_sha IS NULL OR length(target_sha)=40),
+  auto_deploy_paused INTEGER CHECK (auto_deploy_paused IN (0,1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_desktop_command_pending ON desktop_controller_command(controller_id,app_id)
+  WHERE state IN ('prepared','in_flight','outcome_unknown');
+CREATE INDEX idx_desktop_command_binding ON desktop_controller_command(binding_id,created_at,request_key);
+CREATE TRIGGER desktop_command_immutable BEFORE UPDATE ON desktop_controller_command
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.binding_id IS NOT OLD.binding_id
+  OR NEW.controller_id IS NOT OLD.controller_id OR NEW.client_id IS NOT OLD.client_id
+  OR NEW.binding_revision IS NOT OLD.binding_revision OR NEW.app_id IS NOT OLD.app_id
+  OR NEW.operation IS NOT OLD.operation OR NEW.body_json IS NOT OLD.body_json
+  OR NEW.body_sha256 IS NOT OLD.body_sha256 OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'DESKTOP_COMMAND_IMMUTABLE'); END;
+CREATE TRIGGER desktop_command_transition BEFORE UPDATE OF state ON desktop_controller_command
+WHEN NOT (NEW.state=OLD.state
+  OR (OLD.state='prepared' AND NEW.state IN ('in_flight','cancelled'))
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','accepted','rejected'))
+  OR (OLD.state='outcome_unknown' AND NEW.state='accepted'))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_COMMAND_TRANSITION_INVALID'); END;
+
+-- Migration 026: Product project registration
+-- Tombstone quản trị cục bộ; không xóa theo app/target để giữ request namespace.
+CREATE TABLE product_project_registration (
+  controller_id TEXT NOT NULL,
+  administrator_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  body_json TEXT NOT NULL CHECK (length(body_json) BETWEEN 1 AND 8192),
+  body_sha256 TEXT NOT NULL CHECK (length(body_sha256)=64),
+  app_id INTEGER NOT NULL CHECK (app_id>=1),
+  target_vps_id INTEGER NOT NULL CHECK (target_vps_id>=1),
+  target_security_revision INTEGER NOT NULL CHECK (target_security_revision>=1),
+  result_json TEXT NOT NULL CHECK (length(result_json) BETWEEN 1 AND 4096),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(controller_id,administrator_id,request_key)
+);
+CREATE TRIGGER product_project_registration_immutable BEFORE UPDATE ON product_project_registration
+BEGIN SELECT RAISE(ABORT,'PRODUCT_PROJECT_REGISTRATION_IMMUTABLE'); END;
+
+-- Migration 027: Desktop project setup
+CREATE TABLE desktop_project_setup (
+  request_key TEXT PRIMARY KEY NOT NULL,
+  binding_id TEXT NOT NULL,
+  binding_revision INTEGER NOT NULL CHECK (binding_revision>=1),
+  controller_id TEXT NOT NULL,
+  target_vps_id INTEGER NOT NULL CHECK (target_vps_id>=1),
+  target_security_revision INTEGER NOT NULL CHECK (target_security_revision>=1),
+  app_name TEXT NOT NULL,
+  body_json TEXT NOT NULL CHECK(length(body_json) BETWEEN 1 AND 8192),
+  body_sha256 TEXT NOT NULL CHECK(length(body_sha256)=64),
+  state TEXT NOT NULL CHECK(state IN ('prepared','in_flight','outcome_unknown','registered','cancelled')),
+  app_id INTEGER CHECK(app_id>=1),
+  result_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK((state='registered' AND app_id IS NOT NULL AND result_json IS NOT NULL) OR
+    (state<>'registered' AND app_id IS NULL AND result_json IS NULL))
+);
+CREATE UNIQUE INDEX idx_desktop_setup_name ON desktop_project_setup(controller_id,target_vps_id,app_name) WHERE state<>'cancelled';
+CREATE INDEX idx_desktop_setup_binding ON desktop_project_setup(binding_id,created_at);
+CREATE TRIGGER desktop_setup_immutable BEFORE UPDATE ON desktop_project_setup
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.binding_id IS NOT OLD.binding_id
+  OR NEW.binding_revision IS NOT OLD.binding_revision OR NEW.controller_id IS NOT OLD.controller_id
+  OR NEW.target_vps_id IS NOT OLD.target_vps_id OR NEW.target_security_revision IS NOT OLD.target_security_revision
+  OR NEW.app_name IS NOT OLD.app_name OR NEW.body_json IS NOT OLD.body_json
+  OR NEW.body_sha256 IS NOT OLD.body_sha256 OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'DESKTOP_SETUP_IMMUTABLE'); END;
+CREATE TRIGGER desktop_setup_transition BEFORE UPDATE OF state ON desktop_project_setup
+WHEN NOT (NEW.state=OLD.state OR (OLD.state='prepared' AND NEW.state IN ('in_flight','cancelled'))
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','registered'))
+  OR (OLD.state='outcome_unknown' AND NEW.state IN ('in_flight','registered')))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_SETUP_TRANSITION_INVALID'); END;
+
+-- Migration 028: Desktop target credentials / atomic controller registration
+CREATE TABLE product_vps_registration (
+  controller_id TEXT NOT NULL,
+  administrator_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  profile_json TEXT NOT NULL CHECK(length(profile_json) BETWEEN 1 AND 4096),
+  profile_sha256 TEXT NOT NULL CHECK(length(profile_sha256)=64),
+  vps_id INTEGER NOT NULL CHECK(vps_id>=1),
+  ssh_security_revision INTEGER NOT NULL CHECK(ssh_security_revision>=1),
+  result_json TEXT NOT NULL CHECK(length(result_json) BETWEEN 1 AND 4096),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(controller_id,administrator_id,request_key)
+);
+CREATE TRIGGER product_vps_registration_immutable BEFORE UPDATE ON product_vps_registration
+BEGIN SELECT RAISE(ABORT,'PRODUCT_VPS_REGISTRATION_IMMUTABLE'); END;
+
+CREATE TABLE desktop_target_setup (
+  request_key TEXT PRIMARY KEY NOT NULL,
+  binding_id TEXT NOT NULL,
+  binding_revision INTEGER NOT NULL CHECK(binding_revision>=1),
+  controller_id TEXT NOT NULL,
+  local_vps_id INTEGER NOT NULL CHECK(local_vps_id>=1),
+  local_security_revision INTEGER NOT NULL CHECK(local_security_revision>=1),
+  profile_json TEXT NOT NULL CHECK(length(profile_json) BETWEEN 1 AND 4096),
+  credential_digest TEXT NOT NULL CHECK(length(credential_digest)=64),
+  state TEXT NOT NULL CHECK(state IN ('prepared','in_flight','outcome_unknown','registered','cancelled')),
+  remote_vps_id INTEGER CHECK(remote_vps_id>=1),
+  remote_security_revision INTEGER CHECK(remote_security_revision>=1),
+  result_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK((state='registered' AND remote_vps_id IS NOT NULL AND remote_security_revision IS NOT NULL AND result_json IS NOT NULL)
+    OR (state<>'registered' AND remote_vps_id IS NULL AND remote_security_revision IS NULL AND result_json IS NULL))
+);
+CREATE UNIQUE INDEX idx_desktop_target_pending ON desktop_target_setup(controller_id,local_vps_id)
+  WHERE state IN ('prepared','in_flight','outcome_unknown');
+CREATE INDEX idx_desktop_target_binding ON desktop_target_setup(binding_id,created_at);
+CREATE TRIGGER desktop_target_setup_immutable BEFORE UPDATE ON desktop_target_setup
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.binding_id IS NOT OLD.binding_id
+  OR NEW.binding_revision IS NOT OLD.binding_revision OR NEW.controller_id IS NOT OLD.controller_id
+  OR NEW.local_vps_id IS NOT OLD.local_vps_id OR NEW.local_security_revision IS NOT OLD.local_security_revision
+  OR NEW.profile_json IS NOT OLD.profile_json OR NEW.credential_digest IS NOT OLD.credential_digest
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'DESKTOP_TARGET_SETUP_IMMUTABLE'); END;
+CREATE TRIGGER desktop_target_setup_transition BEFORE UPDATE OF state ON desktop_target_setup
+WHEN NOT (NEW.state=OLD.state OR (OLD.state='prepared' AND NEW.state IN ('in_flight','cancelled'))
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','registered'))
+  OR (OLD.state='outcome_unknown' AND NEW.state IN ('in_flight','registered')))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_TARGET_SETUP_TRANSITION_INVALID'); END;
+
+-- Desktop controller installation journal (migration 029)
+-- Local coordination only. Retain the remote request identity after deleting a VPS.
+CREATE TABLE desktop_controller_installation (
+  request_key TEXT PRIMARY KEY NOT NULL CHECK(length(request_key)=36),
+  vps_id INTEGER NOT NULL CHECK(vps_id>=1),
+  authority_revision INTEGER NOT NULL CHECK(authority_revision>=1),
+  ssh_security_revision INTEGER NOT NULL CHECK(ssh_security_revision>=1),
+  principal_json TEXT NOT NULL CHECK(length(principal_json) BETWEEN 1 AND 2048),
+  identity_key TEXT NOT NULL CHECK(length(identity_key)=64),
+  credential_digest TEXT NOT NULL CHECK(length(credential_digest)=64),
+  release_id TEXT NOT NULL CHECK(length(release_id) BETWEEN 1 AND 128),
+  release_sha256 TEXT NOT NULL CHECK(length(release_sha256)=64),
+  installer_sha256 TEXT NOT NULL CHECK(length(installer_sha256)=64),
+  state TEXT NOT NULL CHECK(state IN ('prepared','in_flight','outcome_unknown','transferred','installed','cancelled')),
+  last_operation TEXT NOT NULL CHECK(last_operation IN ('none','transfer','install','recover','inspect')),
+  operation_id TEXT,
+  owner_session TEXT,
+  ever_dispatched INTEGER NOT NULL DEFAULT 0 CHECK(ever_dispatched IN (0,1)),
+  install_attempted INTEGER NOT NULL DEFAULT 0 CHECK(install_attempted IN (0,1)),
+  discovery_existing INTEGER NOT NULL CHECK(discovery_existing IN (0,1)),
+  controller_id TEXT,
+  result_json TEXT CHECK(result_json IS NULL OR length(result_json) BETWEEN 1 AND 4096),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK(state<>'in_flight' OR (operation_id IS NOT NULL AND owner_session IS NOT NULL)),
+  CHECK(state<>'installed' OR (controller_id IS NOT NULL AND result_json IS NOT NULL)),
+  CHECK(state<>'cancelled' OR (ever_dispatched=0 AND discovery_existing=0))
+);
+CREATE UNIQUE INDEX idx_desktop_install_identity ON desktop_controller_installation(identity_key)
+  WHERE state<>'cancelled';
+CREATE INDEX idx_desktop_install_vps ON desktop_controller_installation(vps_id,created_at);
+CREATE TRIGGER desktop_controller_installation_immutable BEFORE UPDATE ON desktop_controller_installation
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.identity_key IS NOT OLD.identity_key
+  OR NEW.release_id IS NOT OLD.release_id OR NEW.release_sha256 IS NOT OLD.release_sha256
+  OR NEW.installer_sha256 IS NOT OLD.installer_sha256 OR NEW.discovery_existing IS NOT OLD.discovery_existing
+  OR NEW.created_at IS NOT OLD.created_at
+  OR NEW.ever_dispatched<OLD.ever_dispatched OR NEW.install_attempted<OLD.install_attempted
+  OR (OLD.controller_id IS NOT NULL AND NEW.controller_id IS NOT OLD.controller_id)
+BEGIN SELECT RAISE(ABORT,'DESKTOP_INSTALL_IMMUTABLE'); END;
+CREATE TRIGGER desktop_controller_installation_authority BEFORE UPDATE ON desktop_controller_installation
+WHEN NOT (NEW.authority_revision=OLD.authority_revision
+    AND NEW.vps_id=OLD.vps_id AND NEW.ssh_security_revision=OLD.ssh_security_revision
+    AND NEW.principal_json=OLD.principal_json AND NEW.credential_digest=OLD.credential_digest)
+  AND NOT (NEW.authority_revision=OLD.authority_revision+1 AND NEW.state='outcome_unknown'
+    AND NEW.operation_id IS NULL AND NEW.owner_session IS NULL AND OLD.state<>'cancelled')
+BEGIN SELECT RAISE(ABORT,'DESKTOP_INSTALL_AUTHORITY_INVALID'); END;
+CREATE TRIGGER desktop_controller_installation_transition BEFORE UPDATE OF state ON desktop_controller_installation
+WHEN NOT (NEW.state=OLD.state
+  OR (OLD.state='prepared' AND NEW.state IN ('in_flight','cancelled','outcome_unknown'))
+  OR (OLD.state='transferred' AND NEW.state IN ('in_flight','outcome_unknown'))
+  OR (OLD.state='installed' AND NEW.state IN ('in_flight','outcome_unknown'))
+  OR (OLD.state='outcome_unknown' AND NEW.state='in_flight')
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','transferred','installed')))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_INSTALL_TRANSITION_INVALID'); END;
+
+-- Migration030: Desktop-only. Controller schema retains001-029.
+-- Chỉ Desktop: không chạy migration này trên controller.
+CREATE TABLE desktop_controller_upgrade (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_key TEXT NOT NULL UNIQUE CHECK(length(request_key)=36),
+  installation_request_key TEXT NOT NULL REFERENCES desktop_controller_installation(request_key),
+  controller_id TEXT NOT NULL CHECK(length(controller_id)=36),
+  vps_id INTEGER NOT NULL CHECK(vps_id>=1),
+  authority_revision INTEGER NOT NULL CHECK(authority_revision>=1),
+  installation_authority_json TEXT NOT NULL CHECK(length(installation_authority_json) BETWEEN 1 AND 4096),
+  parent_upgrade_key TEXT,
+  parent_release_sha256 TEXT NOT NULL CHECK(length(parent_release_sha256)=64),
+  release_id TEXT NOT NULL CHECK(length(release_id) BETWEEN 1 AND 128),
+  release_sha256 TEXT NOT NULL CHECK(length(release_sha256)=64),
+  installer_sha256 TEXT NOT NULL CHECK(length(installer_sha256)=64),
+  state TEXT NOT NULL CHECK(state IN ('prepared','transferred','in_flight','outcome_unknown','active','rolled_back','cancelled')),
+  last_operation TEXT NOT NULL CHECK(last_operation IN ('none','transfer','upgrade','inspect','recover','rollback')),
+  operation_id TEXT,
+  owner_session TEXT,
+  ever_dispatched INTEGER NOT NULL DEFAULT 0 CHECK(ever_dispatched IN (0,1)),
+  upgrade_attempted INTEGER NOT NULL DEFAULT 0 CHECK(upgrade_attempted IN (0,1)),
+  is_current INTEGER NOT NULL DEFAULT 0 CHECK(is_current IN (0,1)),
+  result_json TEXT CHECK(result_json IS NULL OR length(result_json) BETWEEN 1 AND 4096),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK(state<>'in_flight' OR (operation_id IS NOT NULL AND owner_session IS NOT NULL)),
+  CHECK(state NOT IN ('active','rolled_back') OR result_json IS NOT NULL),
+  CHECK(state<>'cancelled' OR (ever_dispatched=0 AND upgrade_attempted=0 AND is_current=0))
+);
+CREATE UNIQUE INDEX idx_desktop_upgrade_pending ON desktop_controller_upgrade(installation_request_key)
+  WHERE state IN ('prepared','transferred','in_flight','outcome_unknown');
+CREATE UNIQUE INDEX idx_desktop_upgrade_current ON desktop_controller_upgrade(installation_request_key)
+  WHERE is_current=1;
+CREATE TRIGGER desktop_controller_upgrade_immutable BEFORE UPDATE ON desktop_controller_upgrade
+WHEN NEW.sequence IS NOT OLD.sequence OR NEW.request_key IS NOT OLD.request_key
+  OR NEW.installation_request_key IS NOT OLD.installation_request_key OR NEW.controller_id IS NOT OLD.controller_id
+  OR NEW.vps_id IS NOT OLD.vps_id OR NEW.authority_revision IS NOT OLD.authority_revision
+  OR NEW.installation_authority_json IS NOT OLD.installation_authority_json
+  OR NEW.parent_upgrade_key IS NOT OLD.parent_upgrade_key OR NEW.parent_release_sha256 IS NOT OLD.parent_release_sha256
+  OR NEW.release_id IS NOT OLD.release_id OR NEW.release_sha256 IS NOT OLD.release_sha256
+  OR NEW.installer_sha256 IS NOT OLD.installer_sha256 OR NEW.created_at IS NOT OLD.created_at
+  OR NEW.ever_dispatched<OLD.ever_dispatched OR NEW.upgrade_attempted<OLD.upgrade_attempted
+BEGIN SELECT RAISE(ABORT,'DESKTOP_UPGRADE_IMMUTABLE'); END;
+
+-- Migration031: cumulative Desktop authority rebind triggers.
+-- Chỉ Desktop: quyền SSH đổi qua review/consent, không sửa core intent của upgrade.
+CREATE TABLE desktop_controller_authority_rebind (
+  request_key TEXT PRIMARY KEY NOT NULL CHECK(length(request_key)=36),
+  installation_request_key TEXT NOT NULL REFERENCES desktop_controller_installation(request_key),
+  upgrade_request_key TEXT NOT NULL REFERENCES desktop_controller_upgrade(request_key),
+  from_revision INTEGER NOT NULL CHECK(from_revision>=1),
+  to_revision INTEGER NOT NULL CHECK(to_revision=from_revision+1),
+  previous_authority_json TEXT NOT NULL CHECK(json_valid(previous_authority_json) AND length(previous_authority_json) BETWEEN 1 AND 4096),
+  next_authority_json TEXT NOT NULL CHECK(json_valid(next_authority_json) AND length(next_authority_json) BETWEEN 1 AND 4096),
+  result_json TEXT NOT NULL CHECK(json_valid(result_json) AND length(result_json) BETWEEN 1 AND 4096),
+  created_at TEXT NOT NULL,
+  UNIQUE(installation_request_key,to_revision)
+);
+CREATE TRIGGER desktop_authority_rebind_insert BEFORE INSERT ON desktop_controller_authority_rebind
+WHEN NOT EXISTS (
+  SELECT 1 FROM desktop_controller_installation i
+  JOIN desktop_controller_upgrade u ON u.installation_request_key=i.request_key
+  JOIN vps v ON v.id=json_extract(NEW.next_authority_json,'$.vps_id')
+  WHERE i.request_key=NEW.installation_request_key AND u.request_key=NEW.upgrade_request_key
+    AND i.state='installed' AND u.state NOT IN ('cancelled','in_flight') AND v.archived_at IS NULL
+    AND i.authority_revision=NEW.from_revision
+    AND json_extract(NEW.previous_authority_json,'$.authority_revision') IS NEW.from_revision
+    AND json_extract(NEW.next_authority_json,'$.authority_revision') IS NEW.to_revision
+    AND json_extract(NEW.previous_authority_json,'$.installation_request_key') IS i.request_key
+    AND json_extract(NEW.previous_authority_json,'$.controller_id') IS i.controller_id
+    AND json_extract(NEW.previous_authority_json,'$.vps_id') IS i.vps_id
+    AND json_extract(NEW.previous_authority_json,'$.principal') IS i.principal_json
+    AND json_extract(NEW.previous_authority_json,'$.credential_digest') IS i.credential_digest
+    AND json_extract(NEW.previous_authority_json,'$.ssh_security_revision') IS i.ssh_security_revision
+    AND u.installation_authority_json IS NEW.previous_authority_json
+    AND json_remove(NEW.previous_authority_json,'$.vps_id','$.authority_revision','$.principal','$.credential_digest','$.ssh_security_revision')
+      IS json_remove(NEW.next_authority_json,'$.vps_id','$.authority_revision','$.principal','$.credential_digest','$.ssh_security_revision')
+    AND lower(json_extract(NEW.next_authority_json,'$.principal.host')) IS lower(v.host)
+    AND json_extract(NEW.next_authority_json,'$.principal.vpsId') IS v.id
+    AND json_extract(NEW.next_authority_json,'$.principal.port') IS v.port
+    AND json_extract(NEW.next_authority_json,'$.principal.hostFingerprint') IS v.host_fingerprint
+    AND json_extract(NEW.next_authority_json,'$.principal.username') IS v.username
+    AND json_extract(NEW.next_authority_json,'$.principal.authType') IS v.auth_type
+    AND json_extract(NEW.next_authority_json,'$.ssh_security_revision') IS v.ssh_security_revision
+    AND lower(json_extract(NEW.previous_authority_json,'$.principal.host')) IS lower(v.host)
+    AND json_extract(NEW.previous_authority_json,'$.principal.port') IS v.port
+    AND json_extract(NEW.previous_authority_json,'$.principal.hostFingerprint') IS v.host_fingerprint
+    AND json_extract(NEW.previous_authority_json,'$.principal.username') IS v.username
+    AND json_extract(NEW.result_json,'$.request_key') IS u.request_key
+    AND json_extract(NEW.result_json,'$.installation_request_key') IS i.request_key
+    AND json_extract(NEW.result_json,'$.controller_id') IS i.controller_id
+    AND json_extract(NEW.result_json,'$.release_sha256') IS u.release_sha256
+    AND json_extract(NEW.result_json,'$.parent_release_sha256') IS u.parent_release_sha256
+    AND json_extract(NEW.result_json,'$.parent_upgrade_key') IS u.parent_upgrade_key
+    AND json_extract(NEW.result_json,'$.is_current') IS 1
+)
+BEGIN SELECT RAISE(ABORT,'DESKTOP_AUTHORITY_REBIND_INVALID'); END;
+CREATE TRIGGER desktop_authority_rebind_immutable BEFORE UPDATE ON desktop_controller_authority_rebind
+BEGIN SELECT RAISE(ABORT,'DESKTOP_AUTHORITY_REBIND_IMMUTABLE'); END;
+CREATE TRIGGER desktop_authority_rebind_retain BEFORE DELETE ON desktop_controller_authority_rebind
+BEGIN SELECT RAISE(ABORT,'DESKTOP_AUTHORITY_REBIND_IMMUTABLE'); END;
+
+DROP TRIGGER desktop_controller_installation_authority;
+CREATE TRIGGER desktop_controller_installation_authority BEFORE UPDATE ON desktop_controller_installation
+WHEN NOT (NEW.authority_revision=OLD.authority_revision
+    AND NEW.vps_id=OLD.vps_id AND NEW.ssh_security_revision=OLD.ssh_security_revision
+    AND NEW.principal_json=OLD.principal_json AND NEW.credential_digest=OLD.credential_digest)
+  AND NOT (NEW.authority_revision=OLD.authority_revision+1 AND NEW.state='outcome_unknown'
+    AND NEW.operation_id IS NULL AND NEW.owner_session IS NULL AND OLD.state<>'cancelled'
+    AND NOT EXISTS (SELECT 1 FROM desktop_controller_upgrade u WHERE u.installation_request_key=OLD.request_key
+      AND u.state<>'cancelled' AND (u.upgrade_attempted=1 OR u.is_current=1)))
+  AND NOT (OLD.state='installed' AND NEW.state='installed' AND NEW.operation_id IS NULL AND NEW.owner_session IS NULL
+    AND EXISTS (SELECT 1 FROM desktop_controller_authority_rebind a
+      WHERE a.installation_request_key=OLD.request_key AND a.from_revision=OLD.authority_revision
+        AND a.to_revision=NEW.authority_revision
+        AND json_extract(a.next_authority_json,'$.vps_id') IS NEW.vps_id
+        AND json_extract(a.next_authority_json,'$.principal') IS NEW.principal_json
+        AND json_extract(a.next_authority_json,'$.ssh_security_revision') IS NEW.ssh_security_revision
+        AND json_extract(a.next_authority_json,'$.credential_digest') IS NEW.credential_digest))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_INSTALL_AUTHORITY_INVALID'); END;
+
+DROP TRIGGER desktop_controller_upgrade_immutable;
+CREATE TRIGGER desktop_controller_upgrade_immutable BEFORE UPDATE ON desktop_controller_upgrade
+WHEN NEW.sequence IS NOT OLD.sequence OR NEW.request_key IS NOT OLD.request_key
+  OR NEW.installation_request_key IS NOT OLD.installation_request_key OR NEW.controller_id IS NOT OLD.controller_id
+  OR NEW.parent_upgrade_key IS NOT OLD.parent_upgrade_key OR NEW.parent_release_sha256 IS NOT OLD.parent_release_sha256
+  OR NEW.release_id IS NOT OLD.release_id OR NEW.release_sha256 IS NOT OLD.release_sha256
+  OR NEW.installer_sha256 IS NOT OLD.installer_sha256 OR NEW.created_at IS NOT OLD.created_at
+  OR NEW.ever_dispatched<OLD.ever_dispatched OR NEW.upgrade_attempted<OLD.upgrade_attempted
+  OR ((NEW.vps_id IS NOT OLD.vps_id OR NEW.authority_revision IS NOT OLD.authority_revision
+    OR NEW.installation_authority_json IS NOT OLD.installation_authority_json)
+    AND NOT EXISTS (SELECT 1 FROM desktop_controller_authority_rebind a
+      WHERE a.installation_request_key=OLD.installation_request_key AND a.from_revision=OLD.authority_revision
+        AND a.to_revision=NEW.authority_revision AND a.previous_authority_json IS OLD.installation_authority_json
+        AND a.next_authority_json IS NEW.installation_authority_json
+        AND json_extract(a.next_authority_json,'$.vps_id') IS NEW.vps_id))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_UPGRADE_IMMUTABLE'); END;
+
+-- R7h-1 / migration032: Product staged environment revisions
+-- R7h-1: staged configuration only. No activation/source/job/policy mutation.
+CREATE TABLE product_environment_revision (
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  ownership_generation INTEGER NOT NULL CHECK(ownership_generation BETWEEN 1 AND 9007199254740991),
+  revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),
+  basis_source_generation INTEGER NOT NULL CHECK(basis_source_generation BETWEEN 1 AND 9007199254740991),
+  basis_source_config_sha256 TEXT NOT NULL CHECK(length(basis_source_config_sha256)=64),
+  target_binding_json TEXT NOT NULL CHECK(json_valid(target_binding_json)),
+  framework TEXT NOT NULL CHECK(framework IN ('express','static-spa','nextjs')),
+  runtime_keys_json TEXT NOT NULL CHECK(json_valid(runtime_keys_json) AND json_type(runtime_keys_json)='array'),
+  public_build_keys_json TEXT NOT NULL CHECK(json_valid(public_build_keys_json) AND json_type(public_build_keys_json)='array'),
+  crypto_scheme TEXT NOT NULL CHECK(crypto_scheme='aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK(typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 131072),
+  iv BLOB NOT NULL CHECK(typeof(iv)='blob' AND length(iv)=12),
+  auth_tag BLOB NOT NULL CHECK(typeof(auth_tag)='blob' AND length(auth_tag)=16),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(app_id,ownership_generation,revision),
+  FOREIGN KEY(app_id,basis_source_generation,basis_source_config_sha256)
+    REFERENCES product_source_config(app_id,source_generation,config_sha256) ON DELETE RESTRICT
+);
+CREATE TRIGGER product_environment_revision_immutable BEFORE UPDATE ON product_environment_revision
+BEGIN SELECT RAISE(ABORT,'PRODUCT_ENVIRONMENT_IMMUTABLE'); END;
+CREATE TRIGGER product_environment_revision_retain BEFORE DELETE ON product_environment_revision
+BEGIN SELECT RAISE(ABORT,'PRODUCT_ENVIRONMENT_IMMUTABLE'); END;
+
+
+-- Receipt riêng của staged config: không body JSON/digest chứa secret.
+CREATE TABLE product_environment_request (
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  administrator_id TEXT NOT NULL CHECK(length(administrator_id) BETWEEN 6 AND 15),
+  request_key TEXT NOT NULL CHECK(length(request_key)=36),
+  app_id INTEGER NOT NULL,
+  ownership_generation INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  crypto_scheme TEXT NOT NULL CHECK(crypto_scheme='aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK(typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 131072),
+  iv BLOB NOT NULL CHECK(typeof(iv)='blob' AND length(iv)=12),
+  auth_tag BLOB NOT NULL CHECK(typeof(auth_tag)='blob' AND length(auth_tag)=16),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(controller_id,administrator_id,request_key),
+  UNIQUE(app_id,ownership_generation,revision),
+  FOREIGN KEY(app_id,ownership_generation,revision)
+    REFERENCES product_environment_revision(app_id,ownership_generation,revision) ON DELETE RESTRICT
+);
+CREATE TRIGGER product_environment_request_immutable BEFORE UPDATE ON product_environment_request
+BEGIN SELECT RAISE(ABORT,'PRODUCT_ENVIRONMENT_REQUEST_IMMUTABLE'); END;
+CREATE TRIGGER product_environment_request_retain BEFORE DELETE ON product_environment_request
+BEGIN SELECT RAISE(ABORT,'PRODUCT_ENVIRONMENT_REQUEST_IMMUTABLE'); END;
+
+
+-- Chỉ Desktop: replay cùng body qua ciphertext, không plaintext/digest secret.
+CREATE TABLE desktop_environment_intent (
+  request_key TEXT PRIMARY KEY NOT NULL CHECK(length(request_key)=36),
+  project_request_key TEXT NOT NULL REFERENCES desktop_project_setup(request_key) ON DELETE RESTRICT,
+  binding_id TEXT NOT NULL,
+  binding_revision INTEGER NOT NULL CHECK(binding_revision>=1),
+  controller_id TEXT NOT NULL,
+  app_id INTEGER NOT NULL CHECK(app_id>=1),
+  context_json TEXT NOT NULL CHECK(json_valid(context_json) AND length(context_json)<=32768),
+  crypto_scheme TEXT NOT NULL CHECK(crypto_scheme='aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK(typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 131072),
+  iv BLOB NOT NULL CHECK(typeof(iv)='blob' AND length(iv)=12),
+  auth_tag BLOB NOT NULL CHECK(typeof(auth_tag)='blob' AND length(auth_tag)=16),
+  state TEXT NOT NULL CHECK(state IN ('prepared','in_flight','outcome_unknown','staged','cancelled')),
+  result_json TEXT CHECK(result_json IS NULL OR (json_valid(result_json) AND length(result_json)<=32768)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK((state='staged' AND result_json IS NOT NULL) OR (state<>'staged' AND result_json IS NULL))
+);
+CREATE UNIQUE INDEX idx_desktop_environment_pending ON desktop_environment_intent(controller_id,app_id)
+  WHERE state IN ('prepared','in_flight','outcome_unknown');
+CREATE TRIGGER desktop_environment_intent_immutable BEFORE UPDATE ON desktop_environment_intent
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.project_request_key IS NOT OLD.project_request_key
+  OR NEW.binding_id IS NOT OLD.binding_id OR NEW.binding_revision IS NOT OLD.binding_revision
+  OR NEW.controller_id IS NOT OLD.controller_id OR NEW.app_id IS NOT OLD.app_id
+  OR NEW.context_json IS NOT OLD.context_json OR NEW.crypto_scheme IS NOT OLD.crypto_scheme
+  OR NEW.encrypted_secret IS NOT OLD.encrypted_secret OR NEW.iv IS NOT OLD.iv OR NEW.auth_tag IS NOT OLD.auth_tag
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'DESKTOP_ENVIRONMENT_INTENT_IMMUTABLE'); END;
+CREATE TRIGGER desktop_environment_intent_transition BEFORE UPDATE ON desktop_environment_intent
+WHEN NOT (NEW.state=OLD.state OR (OLD.state='prepared' AND NEW.state IN ('in_flight','cancelled'))
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','staged'))
+  OR (OLD.state='outcome_unknown' AND NEW.state IN ('in_flight','staged')))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_ENVIRONMENT_INTENT_TRANSITION_INVALID'); END;
+
+
+-- Source identity chỉ reference revision, không value/key list/digest secret.
+CREATE TABLE product_source_environment (
+  app_id INTEGER NOT NULL,
+  source_generation INTEGER NOT NULL CHECK(source_generation BETWEEN 1 AND 9007199254740991),
+  source_config_sha256 TEXT NOT NULL CHECK(length(source_config_sha256)=64),
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  ownership_generation INTEGER NOT NULL CHECK(ownership_generation BETWEEN 1 AND 9007199254740991),
+  environment_revision INTEGER NOT NULL CHECK(environment_revision BETWEEN 1 AND 9007199254740991),
+  target_binding_json TEXT NOT NULL CHECK(json_valid(target_binding_json)),
+  administrator_id TEXT NOT NULL CHECK(length(administrator_id) BETWEEN 6 AND 15),
+  request_key TEXT NOT NULL CHECK(length(request_key)=36),
+  request_json TEXT NOT NULL CHECK(json_valid(request_json) AND length(request_json)<=8192),
+  previous_source_generation INTEGER NOT NULL CHECK(previous_source_generation BETWEEN 1 AND 9007199254740991),
+  previous_source_config_sha256 TEXT NOT NULL CHECK(length(previous_source_config_sha256)=64),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(app_id,source_generation),
+  UNIQUE(controller_id,administrator_id,request_key),
+  FOREIGN KEY(app_id,source_generation,source_config_sha256)
+    REFERENCES product_source_config(app_id,source_generation,config_sha256) ON DELETE RESTRICT,
+  FOREIGN KEY(app_id,previous_source_generation,previous_source_config_sha256)
+    REFERENCES product_source_config(app_id,source_generation,config_sha256) ON DELETE RESTRICT,
+  FOREIGN KEY(app_id,ownership_generation,environment_revision)
+    REFERENCES product_environment_revision(app_id,ownership_generation,revision) ON DELETE RESTRICT
+);
+CREATE TRIGGER product_source_environment_immutable BEFORE UPDATE ON product_source_environment
+BEGIN SELECT RAISE(ABORT,'PRODUCT_SOURCE_ENVIRONMENT_IMMUTABLE'); END;
+CREATE TRIGGER product_source_environment_retain BEFORE DELETE ON product_source_environment
+BEGIN SELECT RAISE(ABORT,'PRODUCT_SOURCE_ENVIRONMENT_IMMUTABLE'); END;
+
+-- Desktop selection journal (migration036; excluded from controller role).
+-- Desktop-only: exact request replay, no environment values in this journal.
+CREATE TABLE desktop_environment_selection (
+  request_key TEXT PRIMARY KEY NOT NULL CHECK(length(request_key)=36),
+  project_request_key TEXT NOT NULL REFERENCES desktop_project_setup(request_key) ON DELETE RESTRICT,
+  binding_id TEXT NOT NULL,
+  binding_revision INTEGER NOT NULL CHECK(binding_revision>=1),
+  controller_id TEXT NOT NULL,
+  app_id INTEGER NOT NULL CHECK(app_id>=1),
+  context_json TEXT NOT NULL CHECK(json_valid(context_json) AND length(context_json)<=32768),
+  crypto_scheme TEXT NOT NULL CHECK(crypto_scheme='aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK(typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 65536),
+  iv BLOB NOT NULL CHECK(typeof(iv)='blob' AND length(iv)=12),
+  auth_tag BLOB NOT NULL CHECK(typeof(auth_tag)='blob' AND length(auth_tag)=16),
+  state TEXT NOT NULL CHECK(state IN ('prepared','in_flight','outcome_unknown','selected','not_applied','cancelled')),
+  result_json TEXT CHECK(result_json IS NULL OR (json_valid(result_json) AND length(result_json)<=32768)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK((state='selected' AND result_json IS NOT NULL) OR (state<>'selected' AND result_json IS NULL))
+);
+CREATE UNIQUE INDEX idx_desktop_environment_selection_pending ON desktop_environment_selection(controller_id,app_id)
+  WHERE state IN ('prepared','in_flight','outcome_unknown');
+CREATE TRIGGER desktop_environment_selection_immutable BEFORE UPDATE ON desktop_environment_selection
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.project_request_key IS NOT OLD.project_request_key
+  OR NEW.binding_id IS NOT OLD.binding_id OR NEW.binding_revision IS NOT OLD.binding_revision
+  OR NEW.controller_id IS NOT OLD.controller_id OR NEW.app_id IS NOT OLD.app_id
+  OR NEW.context_json IS NOT OLD.context_json OR NEW.crypto_scheme IS NOT OLD.crypto_scheme
+  OR NEW.encrypted_secret IS NOT OLD.encrypted_secret OR NEW.iv IS NOT OLD.iv OR NEW.auth_tag IS NOT OLD.auth_tag
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'DESKTOP_ENVIRONMENT_SELECTION_IMMUTABLE'); END;
+CREATE TRIGGER desktop_environment_selection_transition BEFORE UPDATE ON desktop_environment_selection
+WHEN NOT (NEW.state=OLD.state OR (OLD.state='prepared' AND NEW.state IN ('in_flight','not_applied','cancelled'))
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','selected','not_applied'))
+  OR (OLD.state='outcome_unknown' AND NEW.state IN ('in_flight','selected','not_applied')))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_ENVIRONMENT_SELECTION_TRANSITION_INVALID'); END;
+
+-- Planned037: private foundation until protected controller35?37 rollout.
+-- Chưa tự đăng ký vào initializer: chỉ bật cùng protected35→37 rollout gate.
+CREATE TABLE product_managed_postgres (
+  database_id TEXT PRIMARY KEY,
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id),
+  app_id INTEGER NOT NULL REFERENCES app(id),
+  ownership_generation INTEGER NOT NULL CHECK (ownership_generation > 0),
+  target_binding_json TEXT NOT NULL,
+  framework TEXT NOT NULL CHECK (framework IN ('express','nextjs')),
+  image TEXT NOT NULL,
+  crypto_scheme TEXT NOT NULL CHECK (crypto_scheme = 'aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK (length(encrypted_secret) BETWEEN 1 AND 8192),
+  iv BLOB NOT NULL CHECK (length(iv) = 12),
+  auth_tag BLOB NOT NULL CHECK (length(auth_tag) = 16),
+  created_at TEXT NOT NULL,
+  UNIQUE (controller_id, app_id, ownership_generation),
+  UNIQUE (database_id, controller_id, app_id, ownership_generation)
+);
+
+CREATE TABLE product_managed_postgres_request (
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id),
+  administrator_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_json TEXT NOT NULL,
+  database_id TEXT NOT NULL REFERENCES product_managed_postgres(database_id),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (controller_id, administrator_id, request_key)
+);
+
+CREATE TRIGGER product_managed_postgres_immutable
+BEFORE UPDATE ON product_managed_postgres
+BEGIN
+  SELECT RAISE(ABORT, 'managed PostgreSQL identity is immutable');
+END;
+
+CREATE TRIGGER product_managed_postgres_request_immutable
+BEFORE UPDATE ON product_managed_postgres_request
+BEGIN
+  SELECT RAISE(ABORT, 'managed PostgreSQL request is immutable');
+END;
+
+CREATE TRIGGER product_managed_postgres_retain
+BEFORE DELETE ON product_managed_postgres
+BEGIN
+  SELECT RAISE(ABORT, 'managed PostgreSQL identity must be retained');
+END;
+
+CREATE TRIGGER product_managed_postgres_request_retain
+BEFORE DELETE ON product_managed_postgres_request
+BEGIN
+  SELECT RAISE(ABORT, 'managed PostgreSQL request must be retained');
+END;
+
+CREATE TABLE product_source_postgres (
+  app_id INTEGER NOT NULL REFERENCES app(id),
+  source_generation INTEGER NOT NULL CHECK (source_generation > 0),
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id),
+  ownership_generation INTEGER NOT NULL CHECK (ownership_generation > 0),
+  database_id TEXT NOT NULL REFERENCES product_managed_postgres(database_id),
+  source_config_sha256 TEXT NOT NULL,
+  target_binding_json TEXT NOT NULL,
+  environment_source_generation INTEGER,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (app_id, source_generation),
+  FOREIGN KEY (app_id, source_generation, source_config_sha256) REFERENCES product_source_config(app_id, source_generation, config_sha256),
+  FOREIGN KEY (database_id, controller_id, app_id, ownership_generation) REFERENCES product_managed_postgres(database_id, controller_id, app_id, ownership_generation),
+  FOREIGN KEY (app_id, environment_source_generation) REFERENCES product_source_environment(app_id, source_generation)
+);
+CREATE TABLE product_postgres_selection_request (
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id),
+  administrator_id TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_json TEXT NOT NULL,
+  app_id INTEGER NOT NULL,
+  source_generation INTEGER NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (controller_id, administrator_id, request_key),
+  FOREIGN KEY (app_id, source_generation) REFERENCES product_source_postgres(app_id, source_generation)
+);
+CREATE TRIGGER product_source_postgres_immutable BEFORE UPDATE ON product_source_postgres
+BEGIN SELECT RAISE(ABORT,'Product database source binding is immutable'); END;
+CREATE TRIGGER product_source_postgres_retain BEFORE DELETE ON product_source_postgres
+BEGIN SELECT RAISE(ABORT,'Product database source binding must be retained'); END;
+CREATE TRIGGER product_postgres_selection_request_immutable BEFORE UPDATE ON product_postgres_selection_request
+BEGIN SELECT RAISE(ABORT,'Product database selection request is immutable'); END;
+CREATE TRIGGER product_postgres_selection_request_retain BEFORE DELETE ON product_postgres_selection_request
+BEGIN SELECT RAISE(ABORT,'Product database selection request must be retained'); END;
+
+-- Desktop PostgreSQL intent (migration038, controller vẫn037)
+-- Desktop-only PostgreSQL intents; no server credentials or runtime authority.
+CREATE TABLE desktop_postgres_intent (
+  request_key TEXT PRIMARY KEY NOT NULL CHECK(length(request_key)=36),
+  project_request_key TEXT NOT NULL REFERENCES desktop_project_setup(request_key) ON DELETE RESTRICT,
+  binding_id TEXT NOT NULL,
+  binding_revision INTEGER NOT NULL CHECK(binding_revision>=1),
+  controller_id TEXT NOT NULL,
+  app_id INTEGER NOT NULL CHECK(app_id>=1),
+  operation TEXT NOT NULL CHECK(operation IN ('prepare','select')),
+  context_json TEXT NOT NULL CHECK(json_valid(context_json) AND length(context_json)<=32768),
+  crypto_scheme TEXT NOT NULL CHECK(crypto_scheme='aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK(typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 65536),
+  iv BLOB NOT NULL CHECK(typeof(iv)='blob' AND length(iv)=12),
+  auth_tag BLOB NOT NULL CHECK(typeof(auth_tag)='blob' AND length(auth_tag)=16),
+  state TEXT NOT NULL CHECK(state IN ('prepared','in_flight','outcome_unknown','resource_prepared','selected','not_applied','cancelled')),
+  result_json TEXT CHECK(result_json IS NULL OR (json_valid(result_json) AND length(result_json)<=32768)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK((state='resource_prepared' AND operation='prepare' AND result_json IS NOT NULL)
+    OR (state='selected' AND operation='select' AND result_json IS NOT NULL)
+    OR (state NOT IN ('resource_prepared','selected') AND result_json IS NULL))
+);
+CREATE UNIQUE INDEX idx_desktop_postgres_pending ON desktop_postgres_intent(controller_id,app_id)
+  WHERE state IN ('prepared','in_flight','outcome_unknown');
+CREATE TRIGGER desktop_postgres_immutable BEFORE UPDATE ON desktop_postgres_intent
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.project_request_key IS NOT OLD.project_request_key
+  OR NEW.binding_id IS NOT OLD.binding_id OR NEW.binding_revision IS NOT OLD.binding_revision
+  OR NEW.controller_id IS NOT OLD.controller_id OR NEW.app_id IS NOT OLD.app_id OR NEW.operation IS NOT OLD.operation
+  OR NEW.context_json IS NOT OLD.context_json OR NEW.crypto_scheme IS NOT OLD.crypto_scheme
+  OR NEW.encrypted_secret IS NOT OLD.encrypted_secret OR NEW.iv IS NOT OLD.iv OR NEW.auth_tag IS NOT OLD.auth_tag
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'DESKTOP_POSTGRES_INTENT_IMMUTABLE'); END;
+CREATE TRIGGER desktop_postgres_transition BEFORE UPDATE ON desktop_postgres_intent
+WHEN NOT (NEW.state=OLD.state
+  OR (OLD.state='prepared' AND NEW.state IN ('in_flight','not_applied','cancelled'))
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','resource_prepared','selected','not_applied'))
+  OR (OLD.state='outcome_unknown' AND NEW.state IN ('resource_prepared','selected','not_applied')))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_POSTGRES_INTENT_TRANSITION_INVALID'); END;
+
+-- Desktop project reconnection (migration039; controller remains037)
+-- Desktop-only consent history; never a fabricated registration/selection.
+CREATE TABLE desktop_project_reconnection (
+  request_key TEXT PRIMARY KEY NOT NULL CHECK(length(request_key)=36),
+  provenance TEXT NOT NULL CHECK(provenance='explicit_reconnection_v1'),
+  binding_id TEXT NOT NULL REFERENCES desktop_controller_binding(binding_id) ON DELETE RESTRICT,
+  binding_revision INTEGER NOT NULL CHECK(binding_revision>=1),
+  controller_id TEXT NOT NULL,
+  app_id INTEGER NOT NULL CHECK(app_id>=1),
+  snapshot_sha256 TEXT NOT NULL CHECK(length(snapshot_sha256)=64 AND snapshot_sha256 NOT GLOB '*[^a-f0-9]*'),
+  crypto_scheme TEXT NOT NULL CHECK(crypto_scheme='aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK(typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 65536),
+  iv BLOB NOT NULL CHECK(typeof(iv)='blob' AND length(iv)=12),
+  auth_tag BLOB NOT NULL CHECK(typeof(auth_tag)='blob' AND length(auth_tag)=16),
+  confirmed_at TEXT NOT NULL,
+  UNIQUE(binding_id,binding_revision,controller_id,app_id,snapshot_sha256)
+);
+CREATE INDEX idx_desktop_reconnection_binding ON desktop_project_reconnection(binding_id,confirmed_at DESC,request_key);
+CREATE TRIGGER desktop_project_reconnection_immutable BEFORE UPDATE ON desktop_project_reconnection
+BEGIN SELECT RAISE(ABORT,'DESKTOP_PROJECT_RECONNECTION_IMMUTABLE'); END;
+CREATE TRIGGER desktop_project_reconnection_retain BEFORE DELETE ON desktop_project_reconnection
+BEGIN SELECT RAISE(ABORT,'DESKTOP_PROJECT_RECONNECTION_RETAIN'); END;

@@ -156,7 +156,7 @@ describe('SharedIngressTab', () => {
       return ok(latest)
     })
     await screen.findByRole('heading', { name: /Domain & HTTPS|Tên miền & HTTPS/ })
-    fireEvent.click(screen.getByRole('button', { name: 'Thiết lập HTTPS' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Thiết lập HTTPS' }))
     expect(calls).toEqual([])
     fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục' }))
     await waitFor(() => expect(calls).toEqual(['install', 'reconcile', 'https_check']))

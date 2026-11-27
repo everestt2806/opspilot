@@ -8,6 +8,11 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { createCredentialCipher } from './crypto/masterKey'
 import { loadSecret } from './crypto/credentials'
+import { DesktopControllerService } from './controlPlane/desktopControllerService'
+import {
+  builtinControllerInstallerCatalog,
+  ControllerInstallerResources
+} from './controlPlane/controllerInstallerCatalog'
 import { closeDatabase, initializeDatabase } from './db'
 import { AppRepository } from './db/appRepository'
 import { ActionLogRepository } from './db/actionLogRepository'
@@ -28,6 +33,7 @@ import { MlApiClient } from './monitor/mlApi'
 import { shutdownRuntime } from './shutdown'
 import { MigrateService } from './migrate/service'
 import { getMainWindowOptions } from './windowOptions'
+import { closeSplashWindow, createSplashWindow, updateSplashStatus } from './splash'
 import { runRecoveryManifestCli } from './vps/recoveryManifestCli'
 import { AppError } from './errors'
 
@@ -44,6 +50,7 @@ if (recoverySourceProfile) {
 }
 
 let mainWindow: BrowserWindow | null = null
+let splashWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
 let sshManager: SshManager | null = null
 let monitorScheduler: MonitorScheduler | null = null
@@ -54,12 +61,19 @@ function emitMlStatus(status: { running: boolean; reason?: string }): void {
   mainWindow?.webContents.send('system:ml-status', status)
 }
 
-function createWindow(): void {
-  mainWindow = new BrowserWindow(getMainWindowOptions(join(__dirname, '../preload/index.js'), icon))
+function createWindow(showImmediately = true, onReady?: () => void): void {
+  mainWindow = new BrowserWindow({
+    ...getMainWindowOptions(join(__dirname, '../preload/index.js'), icon),
+    show: showImmediately
+  })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
-    mainWindow?.focus()
+    if (onReady) {
+      onReady()
+    } else {
+      mainWindow?.show()
+      mainWindow?.focus()
+    }
   })
   mainWindow.on('maximize', () => {
     mainWindow?.webContents.send('window:maximized-changed', { maximized: true })
@@ -89,8 +103,10 @@ function createWindow(): void {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  mainWindow.show()
-  mainWindow.focus()
+  if (showImmediately) {
+    mainWindow.show()
+    mainWindow.focus()
+  }
 }
 
 void app
@@ -99,10 +115,16 @@ void app
     electronApp.setAppUserModelId('vn.opspilot.desktop')
     app.setName('OpsPilot')
 
+    const splashStartedAt = Date.now()
+    if (!process.env.OPSPILOT_R3D_SOURCE_PROFILE) {
+      splashWindow = createSplashWindow(icon)
+    }
+
     app.on('browser-window-created', (_event, window) => {
       optimizer.watchWindowShortcuts(window)
     })
 
+    updateSplashStatus(splashWindow, 'Initializing local database & vault…', 32)
     const userDataPath = app.getPath('userData')
     const database = initializeDatabase(userDataPath)
     const credentialCipher = createCredentialCipher(userDataPath)
@@ -134,7 +156,14 @@ void app
     deployRuntime = deployService
 
     const historyService = new HistoryService(new ActionLogRepository(database))
-    const monitorService = new MonitorService(database)
+    const monitorService = new MonitorService(database, {
+      autoRollback: (req) =>
+        deployService.rollbackAuto(req.appId, req.targetDeploymentId, {
+          method: req.method,
+          consecutive: req.consecutive,
+          peakScore: req.peakScore
+        })
+    })
     const migrateService = new MigrateService(database, sshManager, (event) => {
       mainWindow?.webContents.send('migrate:event', event)
     })
@@ -147,6 +176,13 @@ void app
       policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
     })
 
+    const installerResources = new ControllerInstallerResources(
+      builtinControllerInstallerCatalog(),
+      join(
+        app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'),
+        'controller-releases'
+      )
+    )
     registerIpcHandlers(
       mlService,
       vpsService,
@@ -156,7 +192,15 @@ void app
       () => mainWindow,
       monitorService,
       migrateService,
-      sharedIngressService
+      sharedIngressService,
+      new DesktopControllerService(
+        database,
+        credentialCipher,
+        sshManager,
+        undefined,
+        installerResources.entries(),
+        installerResources
+      )
     )
     if (process.env.OPSPILOT_R3D_SOURCE_PROFILE) {
       try {
@@ -189,16 +233,31 @@ void app
           sshManager!,
           port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
           (event) => mainWindow?.webContents.send('monitor:tick', event),
-          (status) => emitMlStatus(status)
+          (status) => emitMlStatus(status),
+          (event) => mainWindow?.webContents.send('system:auto-rollback', event)
         )
       })
       monitorScheduler.start()
     }
 
-    createWindow()
+    updateSplashStatus(splashWindow, 'Loading desktop control plane…', 72)
+    createWindow(false, () => {
+      updateSplashStatus(splashWindow, 'Ready', 100)
+      const elapsed = Date.now() - splashStartedAt
+      const minSplashMs = 850
+      const delay = Math.max(0, minSplashMs - elapsed)
+      setTimeout(() => {
+        void closeSplashWindow(splashWindow).then(() => {
+          splashWindow = null
+          mainWindow?.show()
+          mainWindow?.focus()
+        })
+      }, delay)
+    })
 
     try {
       if (process.env.OPSPILOT_C01_DEPLOY_ONLY !== '1') {
+        updateSplashStatus(splashWindow, 'Starting local ML service…', 88)
         await mlService.start()
       }
     } catch (error) {
@@ -213,11 +272,13 @@ void app
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow()
+        createWindow(true)
       }
     })
   })
-  .catch((error: unknown) => {
+  .catch(async (error: unknown) => {
+    await closeSplashWindow(splashWindow)
+    splashWindow = null
     logger.error('system', 'Ứng dụng khởi động thất bại', {
       error: error instanceof Error ? error.message : String(error)
     })

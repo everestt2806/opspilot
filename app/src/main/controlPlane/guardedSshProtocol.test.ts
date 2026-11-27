@@ -28,10 +28,7 @@ describe('guarded SSH framed protocol', () => {
     'chặn gửi mutation %s sau khi receipt đã seal',
     async (operation) => {
       const receipt = JSON.parse(
-        readFileSync(
-          new URL('../../../scripts/product-h2-review/fixtures.json', import.meta.url),
-          'utf8'
-        )
+        readFileSync(new URL('./__fixtures__/h2-receipt-fixtures.json', import.meta.url), 'utf8')
       ).succeeded as H2TerminalReceipt
       const context = receipt.context
       const secret = Buffer.from(Array.from({ length: 32 }, (_, i) => i))

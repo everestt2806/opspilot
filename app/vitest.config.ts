@@ -12,8 +12,14 @@ export default defineConfig({
     }
   },
   test: {
+    // Bound parallel DOM workers so the full suite can share a developer/CI host with Docker labs.
+    maxWorkers: 4,
     // Node test runner kiểm chứng fixture riêng; không phải Vitest suite.
-    exclude: [...configDefaults.exclude, 'scripts/product-docker-lab/runner.test.mjs'],
+    exclude: [
+      ...configDefaults.exclude,
+      '.out-scripts/**',
+      'scripts/product-docker-lab/runner.test.mjs'
+    ],
     environment: 'node',
     setupFiles: ['./src/renderer/src/test/setupTests.ts'],
     testTimeout: 15000

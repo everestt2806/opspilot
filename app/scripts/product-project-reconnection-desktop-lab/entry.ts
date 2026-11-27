@@ -1,0 +1,7 @@
+export { fixture } from './fixture'
+export { DesktopProjectReconnections } from '../../src/main/controlPlane/desktopProjectReconnection'
+export { DesktopControllerVault } from '../../src/main/controlPlane/desktopControllerVault'
+export { initializeDatabase, closeDatabase } from '../../src/main/db'
+export { ProductPostgresRepository } from '../../src/main/db/productPostgresRepository'
+export { ProductPostgresSelection } from '../../src/main/controlPlane/productPostgresSelection'
+export { default as Database } from 'better-sqlite3'

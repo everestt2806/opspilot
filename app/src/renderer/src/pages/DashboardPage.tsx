@@ -2,19 +2,36 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   AppstoreOutlined,
   CloudServerOutlined,
+  CopyOutlined,
+  EyeOutlined,
   ReloadOutlined,
   RightOutlined,
   RocketOutlined
 } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Empty, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Descriptions,
+  Drawer,
+  Empty,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography
+} from 'antd'
 
 import type { ActionLogEntry, App, IpcError, Vps } from '@shared/ipc'
 
+import { useContextMenu } from '../components/contextMenuContext'
 import { PageHeader } from '../components/PageHeader'
 import { useUiState } from '../store/uiState'
 import { useStrings } from '../strings'
 import { useVpsStore } from '../store/vpsStore'
 import { localDateTime, relativeTime } from '../utils/format'
+import { parseDetailJson } from '../utils/parseDetail'
 import { isVpsCheckedNow, useTicker } from '../vpsResources'
 
 interface DashboardPageProps {
@@ -57,6 +74,8 @@ export function DashboardPage({
   const locale = useUiState((state) => state.locale)
   const setSelectedAppId = useUiState((state) => state.setSelectedAppId)
   const setSelectedVpsId = useUiState((state) => state.setSelectedVpsId)
+  const setDeployPreselect = useUiState((state) => state.setDeployPreselect)
+  const { openContextMenu } = useContextMenu()
   const resources = useVpsStore((state) => state.resources)
   const now = useTicker(5000)
 
@@ -67,6 +86,7 @@ export function DashboardPage({
   const [lastDeploy, setLastDeploy] = useState<ActionLogEntry | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<IpcError | null>(null)
+  const [selectedActivity, setSelectedActivity] = useState<ActionLogEntry | null>(null)
 
   function actionLabel(action: string): string {
     const historyActions = strings.history.actions as Record<string, string> | undefined
@@ -129,14 +149,20 @@ export function DashboardPage({
     }
   }, [])
 
-  function reload(): void {
+  const reload = useCallback((): void => {
     setLoading(true)
     void load()
-  }
+  }, [load])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    const onRefresh = (): void => reload()
+    window.addEventListener('opspilot:refresh', onRefresh)
+    return () => window.removeEventListener('opspilot:refresh', onRefresh)
+  }, [reload])
 
   if (error) {
     return (
@@ -416,12 +442,48 @@ export function DashboardPage({
           <Table<App>
             rowKey="id"
             size="small"
+            tableLayout="fixed"
             loading={loading}
             dataSource={apps}
             columns={appColumns}
             pagination={false}
             onRow={(app) => ({
               onClick: () => handleAppClick(app),
+              onContextMenu: (event) => {
+                openContextMenu(event, [
+                  {
+                    key: 'open',
+                    label: strings.dashboard.apps.openApp,
+                    icon: <AppstoreOutlined />,
+                    onClick: () => handleAppClick(app)
+                  },
+                  ...(app.url
+                    ? [
+                        {
+                          key: 'copy-url',
+                          label: app.url,
+                          icon: <CopyOutlined />,
+                          onClick: () => {
+                            if (navigator.clipboard) void navigator.clipboard.writeText(app.url)
+                          }
+                        }
+                      ]
+                    : []),
+                  ...(onOpenDeploy
+                    ? [
+                        {
+                          key: 'deploy',
+                          label: strings.apps.deployNewVersion,
+                          icon: <RocketOutlined />,
+                          onClick: () => {
+                            setDeployPreselect({ vpsId: app.vps_id, appId: app.id })
+                            onOpenDeploy()
+                          }
+                        }
+                      ]
+                    : [])
+                ])
+              },
               style: { cursor: 'pointer' }
             })}
             locale={{
@@ -456,10 +518,39 @@ export function DashboardPage({
           <Table<ActionLogEntry>
             rowKey="id"
             size="small"
+            tableLayout="fixed"
             loading={loading}
             dataSource={recent}
             columns={recentColumns}
             pagination={false}
+            onRow={(record) => ({
+              onClick: () => setSelectedActivity(record),
+              onContextMenu: (event) => {
+                openContextMenu(event, [
+                  {
+                    key: 'inspect',
+                    label: strings.history.detail.title,
+                    icon: <EyeOutlined />,
+                    onClick: () => setSelectedActivity(record)
+                  },
+                  ...(record.message
+                    ? [
+                        {
+                          key: 'copy-msg',
+                          label: strings.deploy.log.toolbar.copy,
+                          icon: <CopyOutlined />,
+                          onClick: () => {
+                            if (navigator.clipboard && record.message) {
+                              void navigator.clipboard.writeText(record.message)
+                            }
+                          }
+                        }
+                      ]
+                    : [])
+                ])
+              },
+              style: { cursor: 'pointer' }
+            })}
             locale={{
               emptyText: (
                 <Empty
@@ -477,6 +568,103 @@ export function DashboardPage({
           />
         </Card>
       </Space>
+
+      <Drawer
+        open={selectedActivity !== null}
+        onClose={() => setSelectedActivity(null)}
+        title={strings.history.detail.title}
+        width={480}
+        extra={
+          selectedActivity && (
+            <Space size={8}>
+              {selectedActivity.vps_id !== null && onOpenVps && (
+                <Button
+                  size="small"
+                  icon={<CloudServerOutlined />}
+                  onClick={() => {
+                    if (selectedActivity.vps_id !== null) {
+                      setSelectedVpsId(selectedActivity.vps_id)
+                      onOpenVps()
+                      setSelectedActivity(null)
+                    }
+                  }}
+                >
+                  {strings.dashboard.viewVps}
+                </Button>
+              )}
+              {selectedActivity.app_id !== null &&
+                selectedActivity.app_id !== undefined &&
+                onOpenApps && (
+                  <Button
+                    size="small"
+                    icon={<AppstoreOutlined />}
+                    onClick={() => {
+                      if (selectedActivity.app_id) {
+                        setSelectedAppId(selectedActivity.app_id)
+                        onOpenApps()
+                        setSelectedActivity(null)
+                      }
+                    }}
+                  >
+                    {strings.dashboard.apps.openApp}
+                  </Button>
+                )}
+            </Space>
+          )
+        }
+      >
+        {selectedActivity && (
+          <>
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label={strings.history.detail.time}>
+                {localDateTime(selectedActivity.ts)}
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.history.detail.vps}>
+                {selectedActivity.vps_id === null
+                  ? '—'
+                  : (vpsNameById.get(selectedActivity.vps_id) ??
+                    strings.dashboard.recent.unknownVps)}
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.history.detail.action}>
+                {actionLabel(selectedActivity.action)}
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.history.detail.status}>
+                {selectedActivity.status === null ? '—' : statusLabel(selectedActivity.status)}
+              </Descriptions.Item>
+            </Descriptions>
+            {selectedActivity.message && (
+              <Typography.Paragraph style={{ marginTop: 16 }}>
+                {strings.history.detail.message}: {selectedActivity.message}
+              </Typography.Paragraph>
+            )}
+            <Typography.Title level={5} style={{ marginTop: 20 }}>
+              {strings.history.detail.fields}
+            </Typography.Title>
+            {(() => {
+              const fields = parseDetailJson(selectedActivity.detail_json)
+              if (fields.length === 0) {
+                return (
+                  <Typography.Text type="secondary">
+                    {strings.history.detail.emptyFields}
+                  </Typography.Text>
+                )
+              }
+              return (
+                <Descriptions
+                  column={1}
+                  size="small"
+                  bordered
+                  items={fields.map(([key, value]) => ({
+                    key,
+                    label: <span className="mono-text">{key}</span>,
+                    children: <Typography.Text code>{value}</Typography.Text>
+                  }))}
+                />
+              )
+            })()}
+          </>
+        )}
+      </Drawer>
     </section>
   )
 }

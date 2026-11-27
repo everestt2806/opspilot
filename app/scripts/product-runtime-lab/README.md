@@ -1,0 +1,342 @@
+# Product runtime integration lab (R1)
+
+## R7h-3d3c — Active exposure sau env rollback
+
+`run.mjs --environment` (cùng `--spa` hoặc `--nextjs`) chọn env3 trước health-failure
+attempt. Khi rollback, active source3/env2 phải giữ đúng app/collector CID và literal
+values, desired source4/env3 còn pending. ControllerExposure dùng auth riêng để ghi
+observation theo active proof + cả hai source CAS; không sửa signed H2 terminal hoặc
+thực thi config mới. Gate trả metadata active3/desired4, reachable và pending;
+client lab bị revoke, namespace Docker/SSH dọn như cũ.
+
+Probe trong gate Docker là loopback local và không chứng minh observer desktop độc
+lập. Gate HTTP/SQLite và Electron nằm ở `controller-exposure-lab`: Main/public HTTP
+thật nhưng SSH/runtime là fixture. Trình bày đúng phạm vi từng proof. Env lab cấp
+port app trong30000–30999; không bỏ production port policy để hợp thức port ngẫu nhiên.
+Controller trên VPS phải được rollout bằng candidate/upgrade gate riêng mới có code này.
+
+## R7h-3d3a — Source đã chọn environment
+
+`environment-target-capability.mjs --confirm-local-environment-target-capability
+--verify-public-source` bổ sung public Git thật vào gate CLI cùng UID. Cần Linux
+root/Node22/Docker/sshd và mạng tới GitHub. Artifact CLI và API lab phải nằm trong
+namespace private thuộc root, có dependency đã duyệt ở đường Node có thể resolve;
+Python admin xóa env kế thừa nên không dựa vào `NODE_PATH` để chạy CLI con.
+
+Nhánh `feat/release-audit-20261204` của repo demo OpsPilot, root
+`demo-apps/san-nha-booking`, chỉ được fetch/check detector-quota sau selection2;
+không npm install, build, SSH deployment hoặc job. Report ghi full source SHA đã
+fetch và `public_git_source_verified`; gate mặc định vẫn chạy ngoại tuyến như cũ.
+Actual runtime env/rollback thuộc gate `run.mjs --environment`, `--spa`, `--nextjs`.
+
+Không chạy Windows full suite/ControllerService test cùng Root systemd upgrade
+lab hoặc Main upgrade lab: các gate này cùng dùng cổng8768. Main lab dùng Desktop036,
+controller gốc029, candidate035; không đổi migration role để làm test pass.
+
+## R7h-3d2 — Retained helpers và capability env
+
+`target-enrollment-runtime.mjs` nhận `--spa` hoặc `--nextjs` (không đồng thời).
+Giữ `OPSPILOT_CONTROLLER_ARTIFACT` là bundle lịch sử để enroll và execute đúng
+helper cũ, `OPSPILOT_CONTROLLER_READINESS_ARTIFACT` là bundle mới để cold recovery.
+`OPSPILOT_R1_ARTIFACT` là API lab build từ source mới. Fixture và tiến trình mô
+phỏng crash phải init DB bằng role controller; không trộn Desktop migrations.
+Mỗi cặp chạy7 runtime attempts, có deploy/update/build-health failure/rollback,
+T1 mất reply/cold settle không restart app/collector và preterminal unknown không replay.
+App/collector/keys/manifest lịch sử giữ nguyên qua recovery, rồi cleanup riêng nonce.
+
+`environment-target-capability.mjs --confirm-local-environment-target-capability`
+chạy Root Linux Node22 với các artifact trên, tạo SSHD/key/SQLite/controller riêng.
+Chỉ probe Docker resources, không deploy container hoặc truy cập VPS. Gate kiểm
+Express helpereb5c, SPA/Next helper98b0 và env helperf591: actual pinned SSH/HMAC,
+không sửa old material, production CLI và fixed Python adapter chặn legacy env
+trước selection, current target chọn/retry/lookup đúng; legacy env fault fixture
+bị chặn trước dispatch/files ngay cả khi Docker/resources hợp lệ; remote tamper
+bị phát hiện, không tự reinstall. Adapter Python dùng môi trường tối thiểu nên
+artifact cần có approved dependencies trong module search hierarchy, giống release
+được đóng gói; không bật lại NODE_PATH trong adapter để làm gate pass.
+
+Kết quả capability ở `app/.out-scripts/environment-target-capability/<nonce>/`;
+retained runtime ở `app/.out-scripts/target-enrollment-runtime/<nonce>/` cùng
+runtime report liên kết. Đây không phải proof Root installed admin, GUI, OS reboot
+hoặc VPS rollout. Core selection/concurrency không SSH nằm ở fixture riêng
+`product-environment-selection-lab`, không còn được gọi là production CLI gate.
+
+This CLI calls the **real** Product pipeline through fingerprint-pinned OpenSSH, scratch SQLite,
+the target guard/helper, Docker build/run/inspect, and the production collector. It does not use a
+fake channel, Docker command implementation, receipt, or metric generator. It is a local Linux lab,
+not evidence of a production VPS rollout or public HTTPS.
+
+Requirements: Linux/WSL with Node 22, Python 3, Git, npm, OpenSSH server, Docker Linux daemon,
+permission to create an isolated sshd and `/opt/opspilot/r1-<nonce>*` directories. The lab requires
+root in that isolated Linux environment. No existing app/profile/database is used. Pull/build can
+use the network to obtain the approved Node/Python images and Express/collector dependencies.
+
+Use a separate **Linux** installation of `app/control-plane-runtime/package.json` dependencies
+(see the existing controller runtime package in this repo), including its approved esbuild tool.
+Do not rebuild the Windows/Electron `better-sqlite3` binary for Linux. For the existing WSL setup:
+
+```sh
+export OPSPILOT_R1_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r1-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+node app/scripts/product-runtime-lab/run.mjs
+node app/scripts/product-runtime-lab/run.mjs --spa
+node app/scripts/product-runtime-lab/run.mjs --nextjs
+node app/scripts/product-runtime-lab/run.mjs --environment
+node app/scripts/product-runtime-lab/run.mjs --environment --nextjs
+node app/scripts/product-runtime-lab/run.mjs --environment --spa
+node app/scripts/product-runtime-lab/run.mjs --restore-failure
+node app/scripts/product-runtime-lab/verify-deps.mjs
+```
+
+`node` must resolve to Node 22. Build embeds migration SQL with esbuild's raw loader and leaves
+approved runtime packages external. Check TypeScript without changing the regular CLI rootDir:
+
+```sh
+pnpm --prefix app exec tsc -p scripts/product-runtime-lab/tsconfig.json
+```
+
+Cases: first healthy deployment, healthy update, failed app build preserving app+collector,
+unhealthy update restoring the previous exact container and collector with a real rollback byte
+boundary, first build failure, first health failure, and failed collector build. The last case
+must keep the previous collector running, leave the barrier/leases pending and refuse terminal
+success. `--restore-failure` deliberately removes **only this run's verified previous container**
+before rollback; the pipeline must refuse successful finalization and retain authority for recovery.
+This is an unknown outcome requiring R2 reconciliation, not a successful rollback.
+
+R7b: `--spa` dùng Vite/nginx cổng80, thêm ba lần kiểm deep route/index, bundle
+marker và missing asset404 sau deploy/update/rollback. Artifact chmod000 tạo health403
+thật để kiểm rollback; không giả Docker response. Source config chứa framework SPA
+với canonical hash; cùng H2 receipts/lease/fences, không sửa wire protocol.
+
+R7e: `--nextjs` dùng Next.js14.2.35/React18.3.1 đã có trong demo dependency,
+SSR Pages Router với `next start`, cổng3000/health `/`. HTTP status503 từ SSR
+là lỗi thật để kiểm rollback; mỗi first/update/rollback còn kiểm HTML marker,
+asset `/_next/` trả200 và asset thiếu404. Build error vẫn từ postinstall exit42;
+first failure/collector failure và exact-CID/metric boundary/lease gates giữ nguyên.
+`next.config.js` fixture dùng1CPU để giới hạn worker build trong lab; không đổi
+template hoặc giả kết quả health. `--spa` và `--nextjs` cùng lúc bị từ chối trước
+tạo scratch. Không DB/user env/custom server; NODE_ENV=production thuộc template.
+Đây là native lab với verified snapshot, không thay GitHub polling/installed VPS
+rollout; phải build frozen artifact từ source cuối trước khi chạy.
+
+R7h-3b: `--environment` dùng encrypted vault032 và source selection035 thật cho
+hai app fixture. Chọn revision1 trước deploy đầu, revision2 trước update; runtime
+resolver cấp đúng claim-selected revision và ký private env-file bằng key đã
+enroll trong helper. Kiểm tra Docker Env trong RAM (không ghi giá trị ra report),
+giữ empty/space/Unicode/dollar/quote/backslash; restart giữ cấu hình và image không
+chứa runtime values. Next kiểm API trả public value đã compile, SPA kiểm bundle
+chứa public marker. Build failure, health failure và rollback phải giữ exact CID,
+collector và revision2; failed first deploy/collector barrier vẫn được kiểm.
+Không dùng inspector để hiển thị secret, không lưu key trong evidence.sqlite;
+vault ciphertext có trong private backup nhưng key chỉ ở RAM và scratch đã dọn.
+CLI từ chối cờ không biết (kể cả CR bị dính do shell script Windows) trước tạo
+scratch. Đây là actual Linux SSH/Docker local acceptance; chưa chứng minh Desktop
+UI selection, installed release upgrade hoặc deployment trên VPS thật.
+
+Optional `--trace` uses `trace_helper.py` to observe/rethrow exceptions and forward all real operations.
+The default gate uses the unchanged target helper directly. The optional trace contains
+only method names, exception types, source locations, changed top-level configuration field names,
+and whether mount order changed. It never records exception messages, env values, arguments, source,
+credentials or subprocess output. Neither the trace wrapper nor the driver alters protocol responses.
+
+Reports are ignored artifacts in `app/.out-scripts/product-runtime-lab/<nonce>/`: `result.json`,
+`progress.json`, scratch SQLite backup and actual collector JSONL when available. Report the base
+commit **and** subject/bundle hashes; a dirty working-tree run is not a proof of the unchanged base SHA.
+The Git source fixture has real local commits/full SHAs; repository fetching is covered separately.
+
+Cleanup checks exact nonce namespace plus Product app/controller labels before removing containers,
+images or networks; it deletes only verified scratch and per-run metrics directories. It never uses
+prune/reset/clean or inspects/deletes unrelated resources. Temporary SSH keys and enrollment secret
+are generated inside private scratch, never printed or committed, and removed after disconnect.
+The shared Docker image/build cache can grow normally; this tool does not prune global cache.
+
+R1 passing does not enable the executor. R2 still covers lost responses/crashes around seal, T1,
+ACK, idle, T2 and lease/fence expiry; production enrollment, controller service, public exposure,
+three-template/DB parity, installer and real VPS acceptance are separate release gates.
+
+## Recovery matrix (R2)
+
+```sh
+node app/scripts/product-runtime-lab/recovery.mjs
+# Optional focused cases:
+node app/scripts/product-runtime-lab/recovery.mjs after-t1 after-ack
+```
+
+Nine cases: before seal, durable seal before T1, after T1, durable ACK before idle, idle before ACK
+response, after T2, expired committed lease, changed SSH identity in DB, and advanced target fence.
+Target faults terminate the actual helper process after its real fsync/atomic write. Controller
+faults throw after actual repository commits and recovery reads through a **new SQLite connection**;
+this does not claim an OS-level restart of an installed controller service. Expiry is forced into
+the past only in the scratch DB; it is not a natural 60-second soak.
+
+Pre-T1 outcomes intentionally remain unknown and reject settlement; operator reconciliation is
+still required. Post-T1 recovery verifies persisted signed records, leaves the app and collector
+CID/image/start time unchanged and settles idempotently. Stale pin/fence must reject without lease
+release. No phase is replayed to make a run look successful.
+
+The R2 preloader injects faults into an R1 child. After its assertions pass it raises
+`R2_CHECKPOINT_FINISHED` so the R1 child's normal cleanup runs. That child's intentional exit 1
+is **not** a standalone R1 regression result. Only the R2 aggregate may report this profile PASS,
+after checking its own assertions and the child's cleanup/source-unchanged flags.
+Reports: `app/.out-scripts/product-runtime-recovery/<nonce>/result.json`; per-case evidence and
+linked R1 scratch DB/collector artifacts remain separately identified.
+
+## Executor adapter (R3a)
+
+```sh
+# Use a separate artifact so an in-flight R2 matrix keeps its frozen bundle.
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+node app/scripts/product-runtime-lab/executor.mjs
+```
+
+The adapter prepares/verifies its snapshot, runs the real pipeline and returns an internal
+`runtime_settled` reference only when the persisted exact claim/commit/T1/T2 is verified. The
+queue requires a trusted verifier callback; a result string alone cannot let it continue.
+Post-dispatch unknown outcomes do not enter prewrite retry handling.
+
+This fixture supplies an already-verified immutable local Git snapshot to isolate the adapter;
+it does not claim a live repository fetch or service-driven Git polling. All runtime operations,
+receipts and DB records remain real. Six terminal cases reject forged attempt/commit references;
+the collector failure remains unknown without retry. Reports are in
+`app/.out-scripts/product-runtime-executor/<nonce>/` with the linked R1 DB/JSONL artifacts.
+Default `ControllerService` still has no executor: provisioning/admission/cold startup recovery
+and management/UI integration must pass R3b/R3c before enabling always-on deployment.
+
+## Controller key-store component (R3b-1)
+
+```sh
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+node app/scripts/product-runtime-lab/secrets-check.mjs
+```
+
+This Linux-only filesystem gate uses a private scratch directory, generated key material and the
+real AES-GCM cipher. It checks missing-key rejection, create-once/reopen, no implicit rotation,
+owner/mode/symlink/hardlink/size/directory checks. Run as root only in the isolated lab to test
+foreign ownership. It never uses a production profile or prints key/credential bytes. Credential
+binding/tamper tests run separately in `controllerSecrets.test.ts`; per-app HMAC key storage,
+target enrollment and service composition remain pending.
+
+## Per-app runtime keys and routing (R3b-2)
+
+```sh
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b2-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+node app/scripts/product-runtime-lab/runtime-keys-check.mjs
+node app/scripts/product-runtime-lab/key-router.mjs
+```
+
+The first gate checks encrypted material, exact controller/app/generation/purpose binding,
+create-once/load-only semantics, retained old generations, damaged records, unsafe permissions,
+symlinks/hardlinks/owner/size/encoding and two concurrent creator processes. It uses isolated
+root Linux scratch for the foreign-owner check; never a production profile.
+
+The router gate explicitly provisions two app keys from the real store into **lab-only** target
+enrollments before execution. It forwards real pipeline operations; the old R1 assertion reader's
+key is adapted to the app being read, while the subject router loads a fresh repository/key per
+claim. No response, receipt or Docker command is forged. Snapshot transport is the verified local
+Git fixture, not a public Git fetch claim.
+
+During a healthy update it creates future-generation material, verifies a pending T1 record using
+a fresh old-generation repository and injects an exception after the real commit. The production
+adapter performs recovery; the container ID and StartedAt must stay unchanged. Generation material
+is prepared without switching SQL ownership. This does not prove production enrollment or an OS
+restart of an installed service. Reports are in `app/.out-scripts/product-runtime-key-router/<nonce>`.
+
+## Controller SQLite credential to pinned SSH (R3b-3)
+
+```sh
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b3-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+OPSPILOT_KEY_ROUTER_BOUND_SSH=1 node app/scripts/product-runtime-lab/key-router.mjs
+```
+
+This variant explicitly encrypts the lab's generated client key into its scratch SQLite VPS row,
+bound to that controller and exact SSH target/revision. Each runtime attempt opens a fresh
+SshManager using `createControllerSshResolver` and the real protected key store. Host key
+verification, SSH, Docker, helpers, per-app HMAC routing and T1 recovery remain real. The fixture
+reads only its generated key already held by the lab manager; it does not import a Desktop DB,
+credential or environment fallback. All owned connections are disconnected on success/failure.
+
+Reports are in `app/.out-scripts/product-runtime-bound-ssh/<nonce>` and include the actual number
+of fresh bound-credential SSH connections. Missing/archived/invalid profiles, identity/revision
+changes, ciphertext/controller/VPS swaps, tampering, missing keys and legacy scheme rejection are
+covered separately by the SQLite/AES unit gate. Windows units substitute only the filesystem key
+loader; they do not establish SSH or prove production enrollment. The service remains polling-only.
+
+## CLI khởi tạo khóa / đăng ký VPS (R3b-4)
+
+```sh
+export OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules
+export OPSPILOT_CONTROL_PLANE_OUTPUT=/var/tmp/opspilot-p3e3a-runtime/r3b4/control-plane.cjs
+node app/scripts/build-control-plane.mjs
+OPSPILOT_CONTROLLER_ARTIFACT="$OPSPILOT_CONTROL_PLANE_OUTPUT" node app/scripts/product-runtime-lab/controller-enrollment.mjs
+```
+
+Gate chạy bằng root **trong Linux lab**, tạo sshd loopback riêng với host/client keys ngẫu nhiên,
+controller data directory/SQLite riêng và gọi bundle CLI bằng các process thật. Không cần Docker
+cho checkpoint này: không chạy remote command, build app hoặc enroll target helper/HMAC. Credential
+chỉ truyền qua stdin; stderr/stdout được kiểm không có secret, không lưu raw output. Gate kiểm
+init không tự sinh key, explicit create-once/permissions, missing/wrong pin/auth, encrypted binding,
+cold CLI replay, hai process đồng thời, conflict, missing/unsafe master key, retained runtime key,
+archived record và input cap/invalid JSON/env fallback. Auth thật dùng key sinh trong lab; password
+path kiểm bằng unit transport, chưa nhận password trên VPS người dùng đã pass.
+
+Reports: `app/.out-scripts/controller-enrollment/<nonce>/result.json`, gồm bundle/driver/subject
+hashes, các ca PASS và cleanup. Scratch keys/SQLite/sshd xóa hoặc dừng cuối gate; không dùng profile
+Desktop hoặc VPS thật. R1/R2/R3a runtime lab có scope riêng, không chạy lại hoặc tính là gate của CLI
+này. Hướng dẫn vận hành: [controller README](../../control-plane-runtime/README.md).
+
+## Gói controller độc lập / verifier (R3b-5a)
+
+```sh
+OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules node app/scripts/product-runtime-lab/controller-bundle.mjs
+node app/scripts/product-runtime-lab/verify-deps.mjs
+```
+
+Gate thứ nhất dùng root Linux scratch để thử foreign owner/permissions, build một CLI tin cậy và
+copy candidate riêng. CLI tin cậy chỉ đọc candidate từ cwd khác repo. Kiểm 10 asset byte-identical,
+11 payload files, explicit manifest pin, không DB; negative cases gồm sửa/mất file, extra file/dir,
+traversal dù pin khớp, symlink file/manifest/directory, hardlink ngoài bundle, owner/mode và builder
+từ chối linked entrypoint. Candidate giả ghi sentinel nếu execute; verifier phải từ chối mà không
+tạo sentinel. Không gọi code trong candidate để tự chứng minh integrity.
+
+Fresh-dependency gate `verify-deps.mjs` cài lại approved lockfile vào scratch rồi build artifact,
+verify payload11files từ cwd khác và chạy CLI init/status/native SQLite/Zod. Không cần source repo
+ở runtime cwd; builder vẫn đọc source repo để build. Templates/collector đã đóng gói và kiểm byte,
+chưa chứng minh 3-framework Product pipeline hoặc installed-service activation.
+
+Reports: `app/.out-scripts/controller-bundle/<nonce>/result.json`; fresh-install summary stdout.
+Không dữ liệu/khóa người dùng, không target app enrollment/SSH command/VPS mutation trong bundle gate.
+
+## Production target enrollment + installed runtime (R3b-5b)
+
+```sh
+python3 -B -W error::ResourceWarning -m unittest discover -s app/scripts/product-runtime-lab -p test_target_enrollment.py
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b5b-lab.cjs
+export OPSPILOT_CONTROLLER_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b5b/control-plane.cjs
+OPSPILOT_R1_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules node app/scripts/product-runtime-lab/build.mjs
+OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules OPSPILOT_CONTROL_PLANE_OUTPUT="$OPSPILOT_CONTROLLER_ARTIFACT" node app/scripts/build-control-plane.mjs
+node app/scripts/product-runtime-lab/target-enrollment-runtime.mjs
+```
+
+Chạy bằng root trong Linux/WSL lab có Docker/sshd như R1. Fixture tạo SQLite/controller marker/private
+master key/encrypted SSH credential từ chính client key mới sinh của lab, pause hai Product apps trước
+khi có job. CLI production `enroll-target` thực hiện remote atomic installation và ghi proof; helper
+fixtures ban đầu của R1 vẫn còn nhưng **không được dùng làm đường execution** trong gate mới.
+
+Một child controller process thật exit73 sau target response, trước SQLite proof commit. Parent xác
+nhận unknown rồi chạy CLI mới; inspect phải đưa về enrolled mà giữ inode/mtime/hash của marker/key/
+manifest/receipt/3runtime helpers. Fault checkpoint chỉ nằm trong lab prototype, không có wire flag
+hoặc runtime option để inject failure. Đây chưa là installed-service/systemd hoặc host power-loss gate.
+
+Sau enrollment, fixture unpause để chạy cùng7R1 cases, qua bound-credential resolver/per-app key router,
+installed helpers và packaged templates/collector. Ca cuối cố ý giữ **broken collector fixture** để
+chứng minh lỗi build không dừng collector cũ/finalize nhầm. Snapshot vẫn là verified local Git fixture,
+không claim public Git fetch hoặc Git push khi Desktop đóng.
+
+Reports tại `app/.out-scripts/target-enrollment-runtime/<nonce>/{result,enrollment}.json`, linked R1
+report/SQLite/metric evidence. Mọi resource mang nonce riêng; chỉ dọn đúng namespace của lab. Không
+VPS/DB người dùng, không dùng fixture initializers trong production installer hoặc fake receipt/outcome.

@@ -1,70 +1,195 @@
 import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { MonitorService } from './service'
 import { closeDatabase, initializeDatabase } from '../db'
 import { ActivationRepository } from './activation'
 import { withAppLock } from './appLock'
 
 describe('MonitorService mutations', () => {
-  it('reconciles a prepared activation after restart only with verified runtime and stream owner', async () => {
-    const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-reconcile-'))
+  it.each([
+    'product',
+    'runtime_claim',
+    'runtime_deployment_claim',
+    'runtime_takeover',
+    'snapshot_takeover',
+    'snapshot_abort_takeover',
+    'ownership_cycle'
+  ])('leaves the prepared activation to its Product owner: %s', async (scenario) => {
+    const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-monitor-owner-'))
     const db = initializeDatabase(dir)
     try {
-      db.exec(
-        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'),(1,2,'app:v2','running'),(1,3,'app:v3','running'),(1,4,'app:v4','running'); UPDATE deployment SET is_rollback_of=1 WHERE id=3; UPDATE deployment SET is_rollback_of=3 WHERE id=4; UPDATE app SET current_deployment_id=2 WHERE id=1;"
-      )
+      db.exec(`
+          INSERT INTO vps (name,host,username,auth_type,encrypted_secret)
+            VALUES ('v','127.0.0.1','u','password','x');
+          INSERT INTO app (vps_id,name,framework,host_port,container_port)
+            VALUES (1,'app','express',30000,3000);
+          INSERT INTO deployment (app_id,version,image_tag,status)
+            VALUES (1,1,'app:v1','running'),(1,2,'app:v2','running');
+          UPDATE app SET current_deployment_id=1 WHERE id=1;
+          INSERT INTO product_controller VALUES ('monitor-owner', '2026-11-05T00:00:00Z', 'active');
+          INSERT INTO product_source_config VALUES
+            (1,1,'https://example.test/repo.git','main','.','{}','${'a'.repeat(64)}','2026-11-05T00:00:00Z');
+          INSERT INTO product_app_control
+            (app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at) VALUES
+            (1,'desktop',NULL,1,1,'${'a'.repeat(64)}','2026-11-05T00:00:00Z');
+        `)
       const activation = new ActivationRepository(db)
-      activation.ensureLegacy(1, 2, 1, { generation: '1:1' })
-      const prepared = activation.prepare(1, 4, { generation: '1:1' }, 1, 'manual_rollback')
-      closeDatabase()
-      const reopened = initializeDatabase(dir)
-      const ssh = {
-        exec: async (_vps: number, command: string) => ({
+      activation.ensureLegacy(1, 1, 1, { generation: '1:1' })
+      const prepared = activation.prepare(1, 2, { generation: '1:1' }, 1, 'deploy')
+      const takeOwnership = (): void => {
+        db.exec(
+          "UPDATE product_app_control SET mode='product',controller_id='monitor-owner',ownership_generation=2 WHERE app_id=1"
+        )
+      }
+      if (scenario === 'product') takeOwnership()
+      if (scenario === 'runtime_claim' || scenario === 'runtime_deployment_claim') {
+        db.exec(`
+            INSERT INTO product_deploy_job
+              (job_id,controller_id,app_id,ownership_generation,source_generation,source_config_sha256,
+               trigger,idempotency_key,ref,target_sha,state,available_at,created_at,updated_at)
+              VALUES ('job','monitor-owner',1,1,1,'${'a'.repeat(64)}','manual_redeploy','manual:job',
+                'main','${'b'.repeat(40)}','deploying','now','now','now');
+            INSERT INTO product_app_fence (app_id,last_fence) VALUES (1,1);
+            INSERT INTO product_app_lease
+              (app_id,lease_id,controller_id,ownership_generation,fence,job_id,expires_at,acquired_at,heartbeat_at)
+              VALUES (1,'lease','monitor-owner',1,1,'job','later','now','now');
+            INSERT INTO product_worker_lease
+              (slot_name,lease_id,controller_id,fence,job_id,expires_at,acquired_at,heartbeat_at)
+              VALUES ('build','build','monitor-owner',1,'job','later','now','now');
+            INSERT INTO product_deploy_attempt
+              (attempt_id,job_id,deployment_id,attempt_number,lease_id,fencing_token,
+               build_slot_lease_id,build_slot_fence,state,remote_outcome,started_at)
+              VALUES ('attempt','job',2,1,'lease',1,'build',1,'deploying','unknown','now');
+            INSERT INTO product_runtime_execution
+              (attempt_id,deployment_id,context_json,context_sha256,activation_id,created_at)
+              VALUES ('attempt',2,'{}','${'c'.repeat(64)}',${scenario === 'runtime_claim' ? prepared : 'NULL'},'now');
+          `)
+      }
+      const exec = vi.fn(async (_vps: number, command: string) => {
+        if (scenario === 'runtime_takeover' || scenario === 'ownership_cycle') {
+          takeOwnership()
+          if (scenario === 'ownership_cycle')
+            db.exec(
+              "UPDATE product_app_control SET mode='desktop',controller_id=NULL,ownership_generation=3 WHERE app_id=1"
+            )
+        }
+        return {
           code: 0,
-          stdout: command.includes('collector') ? 'running\n' : 'app:v1|running\n',
+          stdout: command.includes('collector')
+            ? 'running\n'
+            : scenario === 'snapshot_abort_takeover'
+              ? 'app:v1|running\n'
+              : 'app:v2|running\n',
           stderr: ''
-        }),
-        metricSnapshot: async () => ({ generation: '1:1', device: 1, inode: 1, size: 0 }),
+        }
+      })
+      const ssh = {
+        exec,
+        metricSnapshot: async () => {
+          if (scenario === 'snapshot_takeover' || scenario === 'snapshot_abort_takeover')
+            takeOwnership()
+          return { generation: '1:1', device: 1, inode: 1, size: 0 }
+        },
         fileIdentity: async () => ({ generation: '1:1', device: 1, inode: 1 }),
         fileSize: async () => 0,
         readFileTail: async () => ({ content: '', nextOffset: 1 })
       } as never
 
-      const service = new MonitorService(reopened)
-      await service.pollAll(ssh)
-      const actionsAfterFirstTick = (
-        reopened
-          .prepare("SELECT COUNT(*) AS count FROM action_log WHERE action='deploy'")
-          .get() as {
-          count: number
-        }
-      ).count
-      await service.pollAll(ssh)
+      await new MonitorService(db).pollAll(ssh)
 
       expect(
-        reopened.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
-      ).toEqual({ state: 'active' })
+        db.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
+      ).toEqual({ state: 'prepared' })
+      expect(db.prepare('SELECT current_deployment_id FROM app WHERE id=1').get()).toEqual({
+        current_deployment_id: 1
+      })
       expect(
-        reopened
-          .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
-          .get()
-      ).toEqual({ count: 0 })
-      expect(
-        (
+        db.prepare("SELECT COUNT(*) AS n FROM action_log WHERE action='deploy'").get()
+      ).toEqual({ n: 0 })
+      if (['product', 'runtime_claim', 'runtime_deployment_claim'].includes(scenario))
+        expect(exec).not.toHaveBeenCalled()
+      if (scenario === 'runtime_takeover' || scenario === 'ownership_cycle')
+        expect(exec).toHaveBeenCalledTimes(1)
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each(['modern', 'legacy'])(
+    'reconciles a Desktop activation after restart with verified runtime and stream owner (%s schema)',
+    async (schema) => {
+      const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-reconcile-'))
+      const db = initializeDatabase(dir)
+      try {
+        db.exec(
+          "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'),(1,2,'app:v2','running'),(1,3,'app:v3','running'),(1,4,'app:v4','running'); UPDATE deployment SET is_rollback_of=1 WHERE id=3; UPDATE deployment SET is_rollback_of=3 WHERE id=4; UPDATE app SET current_deployment_id=2 WHERE id=1;"
+        )
+        const activation = new ActivationRepository(db)
+        activation.ensureLegacy(1, 2, 1, { generation: '1:1' })
+        const prepared = activation.prepare(1, 4, { generation: '1:1' }, 1, 'manual_rollback')
+        if (schema === 'legacy')
+          db.exec(
+            'DROP TABLE product_runtime_terminal; DROP TABLE product_runtime_execution; DROP TABLE product_app_control;'
+          )
+        closeDatabase()
+        const reopened = initializeDatabase(dir)
+        if (schema === 'legacy')
+          expect(
+            reopened
+              .prepare(
+                "SELECT name FROM sqlite_master WHERE name IN ('product_app_control','product_runtime_execution')"
+              )
+              .all()
+          ).toEqual([])
+        const ssh = {
+          exec: async (_vps: number, command: string) => ({
+            code: 0,
+            stdout: command.includes('collector') ? 'running\n' : 'app:v1|running\n',
+            stderr: ''
+          }),
+          metricSnapshot: async () => ({ generation: '1:1', device: 1, inode: 1, size: 0 }),
+          fileIdentity: async () => ({ generation: '1:1', device: 1, inode: 1 }),
+          fileSize: async () => 0,
+          readFileTail: async () => ({ content: '', nextOffset: 1 })
+        } as never
+
+        const service = new MonitorService(reopened)
+        await service.pollAll(ssh)
+        const actionsAfterFirstTick = (
           reopened
             .prepare("SELECT COUNT(*) AS count FROM action_log WHERE action='deploy'")
             .get() as {
             count: number
           }
         ).count
-      ).toBe(actionsAfterFirstTick)
-    } finally {
-      closeDatabase()
-      rmSync(dir, { recursive: true, force: true })
+        await service.pollAll(ssh)
+
+        expect(
+          reopened.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
+        ).toEqual({ state: 'active' })
+        expect(
+          reopened
+            .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+            .get()
+        ).toEqual({ count: 0 })
+        expect(
+          (
+            reopened
+              .prepare("SELECT COUNT(*) AS count FROM action_log WHERE action='deploy'")
+              .get() as {
+              count: number
+            }
+          ).count
+        ).toBe(actionsAfterFirstTick)
+      } finally {
+        closeDatabase()
+        rmSync(dir, { recursive: true, force: true })
+      }
     }
-  })
+  )
 
   it('keeps a short boundary and rolls back atomic activation before retrying idempotently', async () => {
     const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-reconcile-boundary-'))

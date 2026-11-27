@@ -1,0 +1,157 @@
+export const CONTROLLER_DATABASE_COPY = {
+  en: {
+    open: 'PostgreSQL',
+    title: 'Project database',
+    close: 'Close',
+    refresh: 'Refresh',
+    note: 'Prepare a private PostgreSQL 16 database for this project, then select it for the next deployment. These steps do not deploy or change the running application.',
+    lifecycle:
+      'Preparation saves configuration only. The database is created or reused during deployment. This screen does not report its runtime health.',
+    none: 'No database prepared',
+    selected: 'Selected for next deployment',
+    unselected: 'Not selected',
+    prepared: 'Database configuration prepared',
+    database: 'Database ID',
+    source: 'Configuration generation',
+    create: 'Prepare database configuration',
+    select: 'Prepare database selection',
+    consent:
+      'I confirm this operation for this project. It does not deploy the application or enable automatic deployment.',
+    send: 'Confirm request',
+    check: 'Check original result',
+    cancel: 'Cancel unsent request',
+    unknown:
+      'The result is unknown. Check the original request before doing anything else. No replacement request will be sent.',
+    paused: 'Pause automatic deployment before changing the database configuration.',
+    unavailable:
+      'Database configuration could not be verified. Refresh to try again. An installed controller or target may need an upgrade.',
+    failure:
+      'The request could not be verified. Check the original result or refresh before continuing.',
+    history: 'Requests',
+    prepare: 'Prepare configuration',
+    choose: 'Select database',
+    states: {
+      prepared: 'Awaiting confirmation',
+      in_flight: 'Sending',
+      outcome_unknown: 'Result unknown',
+      resource_prepared: 'Configuration prepared',
+      selected: 'Selected',
+      not_applied: 'Not applied — configuration changed',
+      cancelled: 'Cancelled'
+    }
+  },
+  vi: {
+    open: 'PostgreSQL',
+    title: 'Cơ sở dữ liệu của dự án',
+    close: 'Đóng',
+    refresh: 'Làm mới',
+    note: 'Chuẩn bị PostgreSQL 16 riêng cho dự án, sau đó chọn cho lần triển khai tiếp. Các bước này chưa triển khai hay thay đổi ứng dụng đang chạy.',
+    lifecycle:
+      'Bước chuẩn bị chỉ lưu cấu hình. Database sẽ được tạo hoặc dùng lại khi triển khai. Màn hình này chưa phản ánh tình trạng hoạt động của database.',
+    none: 'Chưa chuẩn bị database',
+    selected: 'Đã chọn cho lần triển khai tiếp',
+    unselected: 'Chưa chọn',
+    prepared: 'Đã chuẩn bị cấu hình database',
+    database: 'ID database',
+    source: 'Phiên bản cấu hình',
+    create: 'Chuẩn bị cấu hình database',
+    select: 'Chuẩn bị chọn database',
+    consent:
+      'Tôi xác nhận thao tác cho dự án này. Thao tác chưa triển khai ứng dụng hay bật tự động triển khai.',
+    send: 'Xác nhận yêu cầu',
+    check: 'Kiểm tra kết quả gốc',
+    cancel: 'Hủy yêu cầu chưa gửi',
+    unknown:
+      'Chưa rõ kết quả. Hãy kiểm tra yêu cầu gốc trước khi tiếp tục. Ứng dụng sẽ không gửi yêu cầu thay thế.',
+    paused: 'Tạm dừng tự động triển khai trước khi thay đổi cấu hình database.',
+    unavailable:
+      'Chưa xác minh được cấu hình database. Làm mới để thử lại. Controller hoặc VPS đích có thể cần được nâng cấp.',
+    failure: 'Chưa xác minh được yêu cầu. Kiểm tra kết quả gốc hoặc làm mới trước khi tiếp tục.',
+    history: 'Các yêu cầu',
+    prepare: 'Chuẩn bị cấu hình',
+    choose: 'Chọn database',
+    states: {
+      prepared: 'Chờ xác nhận',
+      in_flight: 'Đang gửi',
+      outcome_unknown: 'Chưa rõ kết quả',
+      resource_prepared: 'Đã chuẩn bị cấu hình',
+      selected: 'Đã chọn',
+      not_applied: 'Chưa áp dụng — cấu hình đã thay đổi',
+      cancelled: 'Đã hủy'
+    }
+  },
+  jp: {
+    open: 'PostgreSQL',
+    title: 'プロジェクトのデータベース',
+    close: '閉じる',
+    refresh: '更新',
+    note: '専用のPostgreSQL 16設定を準備し、次回デプロイ用に選択します。現在のアプリは変更されません。',
+    lifecycle:
+      '準備では設定のみ保存します。データベースはデプロイ時に作成または再利用されます。この画面は稼働状態を示しません。',
+    none: 'データベース未準備',
+    selected: '次回デプロイ用に選択済み',
+    unselected: '未選択',
+    prepared: 'データベース設定準備済み',
+    database: 'データベースID',
+    source: '設定世代',
+    create: 'データベース設定を準備',
+    select: 'データベース選択を準備',
+    consent: 'このプロジェクトへの操作を確認します。デプロイや自動デプロイの有効化は行いません。',
+    send: '要求を確定',
+    check: '元の結果を確認',
+    cancel: '未送信の要求を取消',
+    unknown: '結果が不明です。続行前に元の要求を確認してください。代替要求は送信しません。',
+    paused: 'データベース設定を変更する前に自動デプロイを一時停止してください。',
+    unavailable:
+      '設定を確認できません。更新して再試行してください。コントローラーまたは対象VPSの更新が必要な場合があります。',
+    failure: '要求を確認できません。元の結果を確認するか、更新してください。',
+    history: '要求履歴',
+    prepare: '設定を準備',
+    choose: 'データベースを選択',
+    states: {
+      prepared: '確認待ち',
+      in_flight: '送信中',
+      outcome_unknown: '結果不明',
+      resource_prepared: '設定準備済み',
+      selected: '選択済み',
+      not_applied: '未適用 — 設定変更あり',
+      cancelled: '取消済み'
+    }
+  },
+  cn: {
+    open: 'PostgreSQL',
+    title: '项目数据库',
+    close: '关闭',
+    refresh: '刷新',
+    note: '为项目准备独立的PostgreSQL 16配置，然后选择用于下次部署。这些操作不会部署或更改正在运行的应用。',
+    lifecycle: '准备步骤仅保存配置。数据库将在部署时创建或复用。本页面不表示数据库的运行健康状态。',
+    none: '尚未准备数据库',
+    selected: '已选择用于下次部署',
+    unselected: '尚未选择',
+    prepared: '数据库配置已准备',
+    database: '数据库ID',
+    source: '配置版本',
+    create: '准备数据库配置',
+    select: '准备选择数据库',
+    consent: '确认对本项目执行此操作。不会部署应用或启用自动部署。',
+    send: '确认请求',
+    check: '检查原请求结果',
+    cancel: '取消未发送请求',
+    unknown: '结果未知，请先检查原请求。不会发送替代请求。',
+    paused: '更改数据库配置前，请暂停自动部署。',
+    unavailable: '无法验证数据库配置，请刷新重试。控制器或目标VPS可能需要升级。',
+    failure: '无法验证请求。请检查原结果或刷新后再继续。',
+    history: '请求记录',
+    prepare: '准备配置',
+    choose: '选择数据库',
+    states: {
+      prepared: '等待确认',
+      in_flight: '发送中',
+      outcome_unknown: '结果未知',
+      resource_prepared: '配置已准备',
+      selected: '已选择',
+      not_applied: '未应用 — 配置已更改',
+      cancelled: '已取消'
+    }
+  }
+}

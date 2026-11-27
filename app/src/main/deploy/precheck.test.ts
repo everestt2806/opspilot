@@ -7,7 +7,8 @@ import {
   parseBaselineOutput,
   parseListeningPorts,
   readExistingEnvFile,
-  RAM_MIN_MB
+  RAM_MIN_MB,
+  toPrecheckResult
 } from './precheck'
 
 describe('parseListeningPorts', () => {
@@ -86,6 +87,26 @@ describe('parseBaselineOutput', () => {
 })
 
 describe('evaluateBaseline', () => {
+  it('offers runtime preparation only for failed Docker readiness, not a capacity failure', () => {
+    const base = {
+      ramFreeMb: 2048,
+      diskFreeGb: 20,
+      portUsed: false,
+      portInfo: 'chưa dùng',
+      dockerVersion: null
+    }
+    expect(toPrecheckResult(evaluateBaseline(base, 30000), 30000, 'test.invalid')).toMatchObject({
+      passed: false,
+      runtime_preparation_required: true
+    })
+    const capacity = toPrecheckResult(
+      evaluateBaseline({ ...base, ramFreeMb: 128, dockerVersion: '29.10.0' }, 30000),
+      30000,
+      'test.invalid'
+    )
+    expect(capacity.passed).toBe(false)
+    expect(capacity.runtime_preparation_required).toBeUndefined()
+  })
   it('dat khi RAM/disk/docker du va port chua dung', () => {
     const detail = evaluateBaseline(
       {
@@ -154,14 +175,19 @@ describe('readExistingEnvFile', () => {
   })
 
   it.each([
-    { name: 'missing or unreadable file', result: { code: 66, stdout: '', stderr: 'private fake detail' } },
+    {
+      name: 'missing or unreadable file',
+      result: { code: 66, stdout: '', stderr: 'private fake detail' }
+    },
     {
       name: 'oversized file',
       result: { code: 0, stdout: 'x'.repeat(64 * 1024 + 1), stderr: '' }
     }
   ])('fails closed for $name without returning raw source output', async ({ result }) => {
     const ssh = { exec: vi.fn(async () => result) }
-    await expect(readExistingEnvFile(ssh as never, 7, '/opt/opspilot/demo/.env')).rejects.toMatchObject({
+    await expect(
+      readExistingEnvFile(ssh as never, 7, '/opt/opspilot/demo/.env')
+    ).rejects.toMatchObject({
       userMessage: 'Không thể xác minh cấu hình environment hiện có trên VPS.'
     })
   })
@@ -170,7 +196,9 @@ describe('readExistingEnvFile', () => {
     const ssh = {
       exec: vi.fn(async () => Promise.reject(new Error('fake-secret-value in stderr')))
     }
-    await expect(readExistingEnvFile(ssh as never, 7, '/opt/opspilot/demo/.env')).rejects.toMatchObject({
+    await expect(
+      readExistingEnvFile(ssh as never, 7, '/opt/opspilot/demo/.env')
+    ).rejects.toMatchObject({
       userMessage: 'Không thể xác minh cấu hình environment hiện có trên VPS.'
     })
   })

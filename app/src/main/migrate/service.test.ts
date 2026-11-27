@@ -689,4 +689,133 @@ describe('MigrateService guards and confirmation', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+
+  it('includes database table row counts in verifyRows and persists rows into verify_json', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-verify-rows-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,source_path,host_port,container_port) VALUES (1,'demo','express','C:/demo',30000,3000),(2,'demo-m1','express','C:/demo',30001,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'demo:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1;"
+      )
+      const events: unknown[] = []
+      const exec = vi.fn().mockImplementation((_vpsId: number, command: string) => {
+        if (command.includes('RAM_MB')) {
+          return Promise.resolve({
+            code: 0,
+            stdout: 'RAM_MB|2048\nDISK_GB|31G\nDOCKER|Docker version 29.7.2\n',
+            stderr: ''
+          })
+        }
+        return Promise.resolve({ code: 0, stdout: '', stderr: '' })
+      })
+      const service = new MigrateService(database, { exec } as never, (event) => events.push(event))
+      const privateService = service as unknown as {
+        verifyRows(verify: {
+          checksums: Array<{ name: string; sha256: string; size: number; target_sha256?: string }>
+          source_files: { count: number; bytes: number }
+          target_files: { count: number; bytes: number }
+          table_counts: Array<{ table: string; source: number; target: number; ok: boolean }>
+          health: boolean
+          ok: boolean
+          domain_check?: { source: boolean; target: boolean }
+        }): Array<{ label: string; source: string; target: string; ok: boolean }>
+        createTargetApp: ReturnType<typeof vi.fn>
+        backup: ReturnType<typeof vi.fn>
+        transfer: ReturnType<typeof vi.fn>
+        startRestoreDeployment: ReturnType<typeof vi.fn>
+        waitDeployment: ReturnType<typeof vi.fn>
+        verify: ReturnType<typeof vi.fn>
+      }
+
+      const sampleVerify = {
+        checksums: [{ name: 'bundle.tar.gz', sha256: 'abc', size: 123, target_sha256: 'abc' }],
+        source_files: { count: 12, bytes: 4096 },
+        target_files: { count: 12, bytes: 4096 },
+        table_counts: [
+          { table: 'items', source: 1005, target: 1005, ok: true },
+          { table: 'audit', source: 10, target: 9, ok: false }
+        ],
+        health: true,
+        ok: true
+      }
+      expect(privateService.verifyRows(sampleVerify)).toEqual(
+        expect.arrayContaining([
+          {
+            label: 'Database table (items)',
+            source: '1005 rows',
+            target: '1005 rows',
+            ok: true
+          },
+          {
+            label: 'Database table (audit)',
+            source: '10 rows',
+            target: '9 rows',
+            ok: false
+          }
+        ])
+      )
+
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=2")
+        .get() as App
+      privateService.createTargetApp = vi.fn().mockResolvedValue(target)
+      privateService.backup = vi.fn().mockResolvedValue({
+        bytes: 123,
+        artifacts: [{ name: 'bundle.tar.gz', sha256: 'abc', size: 123 }]
+      })
+      privateService.transfer = vi.fn().mockResolvedValue(undefined)
+      privateService.startRestoreDeployment = vi.fn().mockResolvedValue(9)
+      privateService.waitDeployment = vi.fn().mockResolvedValue(undefined)
+      privateService.verify = vi.fn().mockResolvedValue({
+        ...sampleVerify,
+        table_counts: [{ table: 'items', source: 1005, target: 1005, ok: true }],
+        ok: true
+      })
+
+      const { job_id } = service.start({ app_id: 1, target_vps_id: 2 })
+      const deadline = Date.now() + 5_000
+      let row: { status: string; verify_json: string | null } | undefined
+      while (Date.now() < deadline) {
+        row = database
+          .prepare('SELECT status, verify_json FROM migration_job WHERE id=?')
+          .get(job_id) as { status: string; verify_json: string | null }
+        if (row.status === 'awaiting_confirm' || row.status === 'rolled_back') break
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      expect(row?.status).toBe('awaiting_confirm')
+      const persisted = JSON.parse(row?.verify_json ?? '{}') as {
+        rows?: Array<{ label: string; source: string; target: string; ok: boolean }>
+        table_counts?: Array<{ table: string; source: number; target: number; ok: boolean }>
+      }
+      expect(persisted.table_counts).toEqual([
+        { table: 'items', source: 1005, target: 1005, ok: true }
+      ])
+      expect(persisted.rows).toEqual(
+        expect.arrayContaining([
+          {
+            label: 'Database table (items)',
+            source: '1005 rows',
+            target: '1005 rows',
+            ok: true
+          }
+        ])
+      )
+      expect(events).toContainEqual({
+        type: 'verify-result',
+        job_id,
+        rows: expect.arrayContaining([
+          {
+            label: 'Database table (items)',
+            source: '1005 rows',
+            target: '1005 rows',
+            ok: true
+          }
+        ])
+      })
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 })

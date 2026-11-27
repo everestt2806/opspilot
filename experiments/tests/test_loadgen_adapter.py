@@ -1035,3 +1035,75 @@ def test_loadgen_adapter_assert_running_ssh_connection_error() -> None:
 
     assert "Lỗi SSH khi kiểm tra trạng thái container" in str(exc_info.value)
     assert "SSH connection reset by peer" in str(exc_info.value)
+
+
+def test_loadgen_adapter_cleanup_accepts_docker_no_such_object() -> None:
+    """Docker 29 inspect returns 'error: no such object: ...' after removal."""
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+    handle = adapter.start(app_url="http://127.0.0.1:3000", app_name="demo-app", ssh_client=mock_ssh)
+
+    def router(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        mock_ssh.executed_commands.append(cmd)
+        if "docker inspect" in cmd:
+            return 1, "", "error: no such object: opspilot-loadgen-demo-app"
+        return 0, "opspilot-loadgen-demo-app\n", ""
+
+    handle.ssh_client = router
+    handle.cleanup()
+    assert handle.is_running is False
+
+
+def test_loadgen_adapter_assert_running_retries_transient_ssh_timeout() -> None:
+    """Transient SSH_TIMEOUT (code=124) during assert_running retries once cleanly."""
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+
+    inspect_calls = 0
+    seen_timeouts: list[float | None] = []
+
+    def flaky_inspect(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        nonlocal inspect_calls
+        if "docker inspect" in cmd:
+            inspect_calls += 1
+            seen_timeouts.append(timeout)
+            if inspect_calls == 1:
+                return 124, "", "SSH_TIMEOUT"
+            return 0, "running\n", ""
+        return 0, "", ""
+
+    mock_ssh.exec_command = flaky_inspect  # type: ignore[assignment]
+    handle.assert_running()
+    assert inspect_calls == 2
+    assert seen_timeouts == [15.0, 15.0]
+
+
+def test_loadgen_adapter_assert_running_raises_after_repeated_ssh_timeout() -> None:
+    """Repeated SSH_TIMEOUT on both assert_running attempts still raises LoadgenExecutionError."""
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+
+    inspect_calls = 0
+
+    def dead_inspect(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        nonlocal inspect_calls
+        if "docker inspect" in cmd:
+            inspect_calls += 1
+            return 124, "", "SSH_TIMEOUT"
+        return 0, "", ""
+
+    mock_ssh.exec_command = dead_inspect  # type: ignore[assignment]
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.assert_running()
+    assert inspect_calls == 2
+    assert "SSH_TIMEOUT" in str(exc_info.value)

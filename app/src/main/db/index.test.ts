@@ -160,6 +160,15 @@ function downgradeMigration014ToV13(database: Database.Database): void {
 
 function downgradeProductMigrationsToV15(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS desktop_project_reconnection;DELETE FROM schema_version WHERE version=39;DROP TABLE IF EXISTS desktop_postgres_intent;DELETE FROM schema_version WHERE version=38;DROP TABLE IF EXISTS desktop_environment_selection;DELETE FROM schema_version WHERE version=36;DROP TABLE IF EXISTS product_source_environment;DELETE FROM schema_version WHERE version=35;DROP TABLE IF EXISTS desktop_environment_intent;DELETE FROM schema_version WHERE version=34;DROP TABLE IF EXISTS product_environment_request;DELETE FROM schema_version WHERE version=33;DROP TABLE IF EXISTS product_environment_revision;DELETE FROM schema_version WHERE version=32;DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
+    DROP INDEX IF EXISTS idx_product_desktop_client_identity;
+    DELETE FROM schema_version WHERE version=23;
+    DROP TABLE IF EXISTS product_desktop_admin_request;
+    DROP TABLE IF EXISTS product_desktop_credential;
+    DROP TABLE IF EXISTS product_desktop_client;
+    DELETE FROM schema_version WHERE version=22;
+    DROP TABLE IF EXISTS product_target_enrollment;
+    DELETE FROM schema_version WHERE version=21;
     DROP TABLE IF EXISTS product_runtime_terminal;
     DROP TABLE IF EXISTS product_runtime_execution;
     DELETE FROM schema_version WHERE version=20;
@@ -283,7 +292,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -309,12 +318,12 @@ describe('initializeDatabase', () => {
       before as object
     )
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
   })
 
@@ -375,7 +384,7 @@ describe('initializeDatabase', () => {
       healthcheck_response_type: 'status_2xx'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
     database
       .prepare(
@@ -415,7 +424,7 @@ describe('initializeDatabase', () => {
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
   })
 
@@ -523,12 +532,12 @@ describe('initializeDatabase', () => {
       https_probe_peer_ips_json: '["198.51.100.160"]'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
   })
 
@@ -854,6 +863,7 @@ describe('initializeDatabase', () => {
       INSERT INTO deployment (id, app_id, version, image_tag, status)
         VALUES (82, 72, 1, 'existing-app:v1', 'running');
       DROP INDEX idx_vps_archived_identity;
+      DROP TRIGGER desktop_authority_rebind_insert;
       ALTER TABLE vps DROP COLUMN archived_name;
       ALTER TABLE vps DROP COLUMN archived_at;
       DELETE FROM schema_version WHERE version = 8;
@@ -931,6 +941,7 @@ describe('initializeDatabase', () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v5-v6-'))
     const database = initializeDatabase(testDirectory)
     database.exec('DROP INDEX idx_vps_archived_identity')
+    database.exec('DROP TRIGGER desktop_authority_rebind_insert')
     database.exec('ALTER TABLE vps DROP COLUMN archived_name')
     database.exec('ALTER TABLE vps DROP COLUMN archived_at')
     database.exec('ALTER TABLE vps DROP COLUMN host_fingerprint')
@@ -987,8 +998,10 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(29)
-    expect(schemaVersion.version).toBe(20)
+    expect(tables).toHaveLength(50)
+    expect(tables).toContainEqual({ name: 'desktop_project_reconnection' })
+    expect(tables).toContainEqual({ name: 'desktop_postgres_intent' })
+    expect(schemaVersion.version).toBe(39)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -1019,7 +1032,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 39
     })
     expect(
       database
@@ -1218,7 +1231,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(20)
+    expect(successVer.version).toBe(39)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

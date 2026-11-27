@@ -1,10 +1,16 @@
 /**
  * Product controller enrollment and desktop API contract (design checkpoint).
- * This file describes the future wire protocol only; no runtime implements it yet.
+ * Wire protocol: R3c-3 implements local admin client issue/revoke and credential
+ * validation; R3c-4 adds loopback read routes in explicit execution service.
+ * R3c-5b composes bounded manual/policy writes and request lookup. R3c-6a adds a
+ * main-only pinned SSH channel. R3c-6b adds bounded typed main HTTP calls with
+ * current binding/freshness checks and ambiguous-write lookup semantics.
+ * Vault/enrollment UI/logs/rotation/full Desktop authority remain future work.
  * The controller is the sole Product-mode writer. The desktop is an authenticated
  * client/cache and must never fall back to its local deploy pipeline.
  */
 
+import type { ProductExposureView, ProductExposureObservationInput } from './product-exposure'
 import type {
   ProductAppId,
   ProductAttemptId,
@@ -22,6 +28,11 @@ export const PRODUCT_CONTROLLER_API_VERSION = 'v1' as const
 export const PRODUCT_CONTROLLER_API_LOOPBACK = '127.0.0.1' as const
 export const PRODUCT_CONTROLLER_API_PORT = 8768
 export const PRODUCT_CONTROLLER_API_MAX_REQUEST_BYTES = 16 * 1024
+export const PRODUCT_CONTROLLER_API_BODY_TIMEOUT_MS = 5_000
+/** Main-process client deadline includes binding resolution, SSH open and full HTTP response. */
+export const PRODUCT_CONTROLLER_CLIENT_TIMEOUT_MS = 20_000
+export const PRODUCT_CONTROLLER_CLIENT_MAX_TIMEOUT_MS = 30_000
+export const PRODUCT_CONTROLLER_CLIENT_MAX_HEADER_BYTES = 16 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_RESPONSE_BYTES = 1024 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_PAGE_SIZE = 100
 export const PRODUCT_CONTROLLER_API_DEFAULT_PAGE_SIZE = 50
@@ -29,6 +40,18 @@ export const PRODUCT_CONTROLLER_API_MAX_LOG_PAGE_BYTES = 64 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_LOG_LINES = 200
 export const PRODUCT_CONTROLLER_API_CLIENT_STALE_AFTER_MS = 30_000
 export const PRODUCT_CONTROLLER_API_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
+
+/** R3c-6a main-only SSH channel; no local TCP listener or renderer destination input.
+ * Exact expected VPS/endpoint/host SHA256/user/auth type is checked before SSH auth,
+ * after handshake and after channel open against current resolver. No auto replay.
+ * Returned stream is owned by the caller, which must destroy it after HTTP completion.
+ */
+export const PRODUCT_CONTROLLER_SSH_CHANNEL = {
+  destination_host: PRODUCT_CONTROLLER_API_LOOPBACK,
+  destination_port: PRODUCT_CONTROLLER_API_PORT,
+  open_timeout_ms: 15_000,
+  max_open_timeout_ms: 30_000
+} as const
 
 export const PRODUCT_CONTROLLER_HTTP_STATUS = {
   ok: 200,
@@ -52,6 +75,56 @@ export type ProductControllerCursorToken = string
 export type ProductSshOperationKey = string
 export type ProductApiScope = 'read' | 'deploy:manual' | 'policy:write'
 export type ProductDesktopGrantableScope = ProductApiScope
+/** R3c-6c local Desktop state only; these DTOs never contain the API bearer. */
+export interface ProductDesktopControllerBindingMetadata {
+  binding_id: string
+  controller_id: ProductControllerId
+  vps_id: number
+  revision: number
+  state: 'pending' | 'active' | 'delivery_unknown' | 'disabled'
+  remote_client_id: ProductDesktopClientId | null
+  client: ProductDesktopClientIdentity | null
+  created_at: ProductIsoUtc
+  updated_at: ProductIsoUtc
+}
+/** Trusted main input. binding_id is also the durable enrollment request UUID. */
+export interface ProductDesktopControllerBindingIntent {
+  binding_id: string
+  controller_id: ProductControllerId
+  vps_id: number
+  ssh_security_revision: number
+  principal: {
+    vpsId: number
+    host: string
+    port: number
+    hostFingerprint: string
+    username: string
+    authType: 'key' | 'password'
+  }
+  artifact_path: string
+  data_directory: string
+  node_path: string
+  manifest_sha256: string
+  display_name: string
+  requested_scopes: readonly ['read', ...ProductDesktopGrantableScope[]]
+  /** Main-derived installation reference; absent for legacy manual same-UID bindings. */
+  installation?: {
+    request_key: string
+    authority_revision: number
+    release_sha256: string
+    installer_sha256: string
+    runtime_uid: number
+  }
+  /** Explicitly reviewed current upgrade operation; original installation remains immutable. */
+  upgrade?: {
+    request_key: string
+    authority_revision: number
+    release_sha256: string
+    installer_sha256: string
+    parent_upgrade_key: string | null
+    parent_release_sha256: string
+  }
+}
 export type ProductApiCapabilityState = 'available' | 'blocked' | 'unsupported'
 
 export interface ProductApiCapability {
@@ -95,6 +168,13 @@ export interface ProductDesktopEnrollmentRequest {
   display_name: string
   requested_scopes: readonly ['read', ...ProductDesktopGrantableScope[]]
 }
+
+/** R3c-3 trusted Linux CLI `enroll-desktop-client`/`revoke-desktop-client --data-dir ...`
+ * nhận exact request DTO qua stdin; administrator identity lấy OS uid, không body/env actor.
+ * Token opaque random32bytes prefix opspilot_, SHA256-only trong migration022, TTL30ngày.
+ * Replay enrollment không trả lại token; reauth/current admin/controller trước tombstone lookup.
+ * Chưa rotation/HTTP/tunnel trong checkpoint credential substrate; không quảng cáo capability đó.
+ */
 
 export interface ProductDesktopEnrollmentResponse {
   state: 'issued_once'
@@ -195,6 +275,8 @@ export type ProductApiErrorCode =
   | 'UNSUPPORTED'
   | 'CAPABILITY_BLOCKED'
   | 'RECONCILIATION_REQUIRED'
+  | 'EXPOSURE_CONTEXT_CHANGED'
+  | 'EXPOSURE_OBSERVATION_STALE'
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR'
 
@@ -211,14 +293,24 @@ export interface ProductControllerApiError {
   }
 }
 
-/** Main-process transport result; a timeout after send is deliberately ambiguous. */
+/** Main-process transport result; a timeout after send is deliberately ambiguous.
+ * R3c-6b: only fixed declared read/manual/policy operations through pinned SSH;
+ * no caller URL/headers/arbitrary forwarding, no automatic retry or Desktop fallback.
+ * Fresh controller/principal/credential binding is checked before send and return;
+ * response DTOs/media/UTF8/header/body/page sizes are validated. Read errors expose
+ * stable local/API codes only, never raw HTTP/SSH message or credential.
+ * A write with a lost/malformed/5xx response after send returns outcome_unknown.
+ * Query the existing key; do not create a new request key to guess acceptance.
+ * Credentials are injected by trusted main for this slice, not persisted in settings.
+ */
 export type ProductControllerCallResult<T> =
   | { state: 'response_received'; response: T }
   | {
       state: 'outcome_unknown'
       idempotency_key: ProductApiIdempotencyKey
       may_have_been_accepted: true
-      next_step: 'query_same_request_key'
+      /** Commands use request lookup; observations use read-current only. */
+      next_step: 'query_same_request_key' | 'read_current_exposure'
     }
 
 export interface ProductControllerApiMeta {
@@ -281,7 +373,8 @@ export interface ProductControllerJobSummary {
   app_id: ProductAppId
   ownership_generation: number
   source_generation: number
-  target_sha: ProductFullCommitSha
+  /** Persisted manual rollback may not yet resolve a source SHA; never fabricate one. */
+  target_sha: ProductFullCommitSha | null
   state: ProductJobState
   trigger: 'branch_poll' | 'manual_redeploy' | 'manual_rollback'
   attempt_count: number
@@ -339,6 +432,13 @@ export type ProductControllerCursorPayload =
       offset: number
     })
 
+/** R3c-4 cursor là opaque base64url AES-GCM envelope, purpose-bound với controller.
+ * App pages: keyset app_id ASC + first-page upper bound; app collections: stable
+ * rowid/event_id upper bound + offset. Mỗi page reauthenticate/current ownership,
+ * không nhận cursor như authorization. Request/response theo constants size limits.
+ * HTTP writes/logs/request lookup còn 501 UNSUPPORTED; capabilities trả unsupported.
+ */
+
 export interface ProductControllerPage<T> {
   items: readonly T[]
   next_cursor: ProductControllerCursorToken | null
@@ -388,6 +488,9 @@ export interface ProductControllerWriteHeaders {
 }
 
 export interface ProductManualRedeployRequest extends ProductControllerWritePrecondition {
+  /** Optional first activation CAS: specific_sha only, current deployment must be
+   * null and no nonterminal app job in same write transaction. Legacy absent unchanged. */
+  require_first_deployment?: true
   target: { kind: 'current_desired' } | { kind: 'specific_sha'; sha: ProductFullCommitSha }
 }
 
@@ -422,6 +525,8 @@ export interface ProductAutoDeployPolicyResult {
  * SSH administration, not an unauthenticated HTTP endpoint.
  */
 export interface ProductControllerApiRoutes {
+  /** R3c: polling-only/startup/shutdown => maintenance; execution blocked => degraded.
+   * ready means execution capability, not application/domain health. No public runtime details. */
   'GET /healthz': { response: Pick<ProductControllerIdentity, 'api_version' | 'service_state'> }
   'GET /v1/controllers/{controller_id}/identity': { response: ProductControllerApiMeta & ProductControllerIdentity }
   'GET /v1/controllers/{controller_id}/status': { response: ProductControllerApiMeta & ProductControllerStatus }
@@ -429,6 +534,8 @@ export interface ProductControllerApiRoutes {
   'GET /v1/controllers/{controller_id}/capabilities': { response: ProductControllerApiMeta & ProductControllerCapabilities }
   'GET /v1/controllers/{controller_id}/apps': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerAppSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}': { response: ProductControllerApiMeta & ProductControllerAppDetail }
+  'GET /v1/controllers/{controller_id}/apps/{app_id}/exposure': { response: ProductControllerApiMeta & ProductExposureView }
+  'POST /v1/controllers/{controller_id}/apps/{app_id}/exposure': { headers: ProductControllerWriteHeaders; body: ProductExposureObservationInput; response: ProductControllerApiMeta & ProductExposureView }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/jobs': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerJobSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/deployments': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerDeploymentSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/history': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerHistoryPage }
@@ -446,6 +553,8 @@ export interface ProductControllerApiRouteSecurity {
   'GET /v1/controllers/{controller_id}/capabilities': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
+  'GET /v1/controllers/{controller_id}/apps/{app_id}/exposure': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
+  'POST /v1/controllers/{controller_id}/apps/{app_id}/exposure': { authentication: 'bearer'; scope: 'policy:write'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/jobs': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/deployments': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/history': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
@@ -465,6 +574,10 @@ type ProductControllerRoutesHaveSecurity = ProductControllerAssert<
 export type ProductControllerApiRouteSecurityParity = ProductControllerRoutesHaveSecurity
 
 /**
+ * Command routes only. Exposure observations use the latest-observation CAS
+ * and read-current recovery defined in product-exposure.ts; they do not create
+ * command-request tombstones or use GET /requests/{request_key}.
+ *
  * Idempotency-Key is a UUID created by the main process. Its unique lookup
  * namespace is (controller_id, authenticated_client_id, request_key). Resource/
  * app, action and RFC 8785 canonical-body SHA-256 are immutable values on that
@@ -482,6 +595,16 @@ export interface ProductControllerIdempotencyContract {
   changed_request_status: 'IDEMPOTENCY_CONFLICT'
   timeout_status: 'outcome_unknown_query_existing_request'
 }
+
+/** R3c-5a command persistence uses migration023, auth/scopes/current generations
+ * inside the same IMMEDIATE transaction as pause/queue/policy/request tombstone.
+ * Lookup rechecks current Product owner and authenticated client namespace,
+ * while returning the original request generations as historical metadata.
+ * Specific SHA needs server-recorded repository/root provenance. Pause can be
+ * requested while degraded; resume cannot clear unknown/pending settlement or
+ * overtake pending manual work. Operator note plaintext is not persisted.
+ * HTTP write capability stays unsupported until the separate body/drain gate.
+ */
 
 /** SSH-admin operation keys use the authenticated SSH principal, never body actor data. */
 export interface ProductControllerSshIdempotencyContract {

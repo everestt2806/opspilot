@@ -7,7 +7,7 @@ Chạy trong container TRÊN VPS (không phải laptop) để jitter internet kh
 Vá data-path `http_error_rate` (docs/07 mục 2, ghi chú rà soát 28/07): load generator
 công bố bộ đếm request/5xx theo cửa sổ 60s ra file JSON ghi nguyên tử; collector đọc file
 đó để tính error rate thật thay cho ước lượng từ 1 probe/10s. Chỉ ghi file — không mở port,
-đúng quy tắc "không mở thêm port trên VPS" (CLAUDE.md mục 3).
+đúng nguyên tắc kiến trúc "không mở thêm port trên VPS".
 
 Giữ tối thiểu như collector: chỉ dùng `requests` (dependency đã duyệt experiments/, docs/09).
 Bảo lưu toàn bộ giới hạn an toàn: MAX_RPS=50.0, MAX_DURATION_S=30 phút, kiểm tra target lab,

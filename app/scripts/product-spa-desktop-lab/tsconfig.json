@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.scripts.json",
+  "compilerOptions": {
+    "rootDir": "../../..",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["node", "electron"]
+  },
+  "files": ["entry.ts", "../../src/main/raw.d.ts"]
+}

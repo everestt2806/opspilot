@@ -19,6 +19,7 @@ interface UiState {
   theme: ThemeMode
   locale: LocaleMode
   activePage: string
+  sidebarCollapsed: boolean
   selectedVpsId: number | null
   selectedAppId: number | null
   activePanelTab: PanelTabKey
@@ -29,6 +30,8 @@ interface UiState {
   setTheme: (theme: ThemeMode) => void
   setLocale: (locale: LocaleMode) => void
   setActivePage: (page: string) => void
+  setSidebarCollapsed: (collapsed: boolean) => void
+  toggleSidebarCollapsed: () => void
   setSelectedVpsId: (vpsId: number | null) => void
   setSelectedAppId: (appId: number | null) => void
   setActivePanelTab: (tab: PanelTabKey) => void
@@ -44,6 +47,7 @@ export const useUiState = create<UiState>()(
       theme: 'dark',
       locale: 'vi',
       activePage: 'apps',
+      sidebarCollapsed: false,
       selectedVpsId: null,
       selectedAppId: null,
       activePanelTab: 'overview',
@@ -53,6 +57,8 @@ export const useUiState = create<UiState>()(
       setTheme: (theme) => set({ theme }),
       setLocale: (locale) => set({ locale }),
       setActivePage: (activePage) => set({ activePage }),
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      toggleSidebarCollapsed: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSelectedVpsId: (selectedVpsId) => set({ selectedVpsId }),
       setSelectedAppId: (selectedAppId) => set({ selectedAppId }),
       setActivePanelTab: (activePanelTab) => set({ activePanelTab }),

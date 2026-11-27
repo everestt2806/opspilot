@@ -7,8 +7,9 @@ import type { ThemeConfig } from 'antd'
 
 export type ThemeMode = 'light' | 'dark'
 
-export const FONT_UI = "'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif"
-export const FONT_MONO = "'Cascadia Mono', Consolas, monospace"
+export const FONT_UI =
+  "'Segoe UI Variable', 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif"
+export const FONT_MONO = "'JetBrains Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace"
 
 interface Palette {
   /** Thanh tiêu đề native-overlay */
@@ -22,6 +23,7 @@ interface Palette {
   /** Hover, menu nổi, nền input */
   elevated: string
   border: string
+  borderSubtle: string
   borderInput: string
   borderInputHover: string
   textPrimary: string
@@ -34,90 +36,105 @@ interface Palette {
   primary: string
   primaryHover: string
   primaryPressed: string
+  primaryGlow: string
   fillHover: string
+  fillSecondary: string
   fillSelected: string
   success: string
   warning: string
   danger: string
   info: string
+  shadowSm: string
+  shadowMd: string
   scrollThumb: string
   scrollThumbHover: string
   scrollThumbActive: string
 }
 
-/** Bảng màu desktop-tool theo tinh thần VS Code/Fluent: phẳng, viền mảnh, xanh #0E639C làm primary. */
+/** Bảng màu Light trung tính theo tinh thần Fluent / GitHub Desktop: phẳng, sắc nét, không màu mè. */
 const LIGHT: Palette = {
-  window: '#F8F9FA',
-  sidebar: '#F0F2F6',
-  content: '#F8F9FA',
+  window: '#F3F4F6',
+  sidebar: '#F8F9FA',
+  content: '#F3F4F6',
   panel: '#FFFFFF',
-  elevated: '#FFFFFF',
-  border: '#E2E6ED',
-  borderInput: 'rgba(0, 0, 0, 0.16)',
-  borderInputHover: 'rgba(0, 0, 0, 0.32)',
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#64748B',
-  textDisabled: '#94A3B8',
+  elevated: '#F4F5F7',
+  border: '#E4E4E7',
+  borderSubtle: 'rgba(24, 24, 27, 0.06)',
+  borderInput: '#D4D4D8',
+  borderInputHover: '#A1A1AA',
+  textPrimary: '#18181B',
+  textSecondary: '#52525B',
+  textMuted: '#71717A',
+  textDisabled: '#A1A1AA',
   accent: '#0284C7',
   accentHover: '#0369A1',
   accentPressed: '#075985',
-  primary: '#2563EB',
-  primaryHover: '#1D4ED8',
-  primaryPressed: '#1E40AF',
-  fillHover: 'rgba(0, 0, 0, 0.04)',
-  fillSelected: 'rgba(37, 99, 235, 0.08)',
-  success: '#059669',
-  warning: '#D97706',
-  danger: '#DC2626',
-  info: '#0284C7',
-  scrollThumb: '#CBD5E1',
-  scrollThumbHover: '#94A3B8',
-  scrollThumbActive: '#64748B'
+  primary: '#0969DA',
+  primaryHover: '#0550AE',
+  primaryPressed: '#033D8B',
+  primaryGlow: 'rgba(9, 105, 218, 0.14)',
+  fillHover: 'rgba(24, 24, 27, 0.04)',
+  fillSecondary: '#E4E4E7',
+  fillSelected: 'rgba(9, 105, 218, 0.09)',
+  success: '#1A7F37',
+  warning: '#9A6700',
+  danger: '#CF222E',
+  info: '#0969DA',
+  shadowSm: '0 1px 2px rgba(24, 24, 27, 0.04)',
+  shadowMd: '0 6px 20px rgba(24, 24, 27, 0.08)',
+  scrollThumb: '#D4D4D8',
+  scrollThumbHover: '#A1A1AA',
+  scrollThumbActive: '#71717A'
 }
 
+/** Bảng màu Dark graphite trung tính kiểu Docker Desktop / VS Code / Linear: không tím AI. */
 const DARK: Palette = {
-  window: '#0F1117',
-  sidebar: '#121622',
-  content: '#0A0D14',
-  panel: '#121622',
-  elevated: '#1A2030',
-  border: '#1F2637',
-  borderInput: '#273147',
-  borderInputHover: '#3D4C6E',
-  textPrimary: '#E2E8F0',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
-  textDisabled: '#475569',
+  window: '#141518',
+  sidebar: '#17191D',
+  content: '#101114',
+  panel: '#191B20',
+  elevated: '#21242B',
+  border: '#2A2D35',
+  borderSubtle: 'rgba(255, 255, 255, 0.06)',
+  borderInput: '#363A45',
+  borderInputHover: '#4D5363',
+  textPrimary: '#ECEEF2',
+  textSecondary: '#9BA1AE',
+  textMuted: '#6E7681',
+  textDisabled: '#484F58',
   accent: '#38BDF8',
-  accentHover: '#0EA5E9',
-  accentPressed: '#0284C7',
-  primary: '#2563EB',
-  primaryHover: '#3B82F6',
-  primaryPressed: '#1D4ED8',
-  fillHover: 'rgba(255, 255, 255, 0.05)',
-  fillSelected: 'rgba(37, 99, 235, 0.14)',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-  info: '#38BDF8',
-  scrollThumb: '#2C3549',
-  scrollThumbHover: '#3F4D6B',
-  scrollThumbActive: '#54668D'
+  accentHover: '#7DD3FC',
+  accentPressed: '#0EA5E9',
+  primary: '#2F81F7',
+  primaryHover: '#4C93FA',
+  primaryPressed: '#1F6FEB',
+  primaryGlow: 'rgba(47, 129, 247, 0.18)',
+  fillHover: 'rgba(255, 255, 255, 0.045)',
+  fillSecondary: '#20232A',
+  fillSelected: 'rgba(47, 129, 247, 0.14)',
+  success: '#3FB950',
+  warning: '#D29922',
+  danger: '#F85149',
+  info: '#58A6FF',
+  shadowSm: '0 1px 2px rgba(0, 0, 0, 0.22)',
+  shadowMd: '0 8px 24px rgba(0, 0, 0, 0.45)',
+  scrollThumb: '#323640',
+  scrollThumbHover: '#474D5C',
+  scrollThumbActive: '#5C6478'
 }
 
 /** Màu nút thu nhỏ/đóng của overlay native Windows — main đọc qua shared/ipc.ts. */
 export const TITLEBAR_OVERLAY: Record<ThemeMode, { color: string; symbolColor: string }> = {
-  light: { color: LIGHT.window, symbolColor: '#1E293B' },
-  dark: { color: DARK.window, symbolColor: '#E2E8F0' }
+  light: { color: LIGHT.window, symbolColor: '#18181B' },
+  dark: { color: DARK.window, symbolColor: '#ECEEF2' }
 }
 
 /** Palette xterm cho terminal deploy/migrate — xterm cần màu cụ thể (không đọc được
  *  CSS var). Trùng giá trị --term-* sinh ở cssVarsFor: terminal luôn tối ở cả hai theme. */
 export const TERM_COLORS = {
-  background: '#0B0E14',
-  foreground: '#D7DBE4',
-  cursor: '#60A5FA'
+  background: '#0C0D10',
+  foreground: '#E2E6EE',
+  cursor: '#58A6FF'
 } as const
 
 function cssVarsFor(mode: ThemeMode): Record<string, string> {
@@ -132,6 +149,7 @@ function cssVarsFor(mode: ThemeMode): Record<string, string> {
     '--bg-panel': c.panel,
     '--bg-elevated': c.elevated,
     '--border': c.border,
+    '--border-subtle': c.borderSubtle,
     '--border-input': c.borderInput,
     '--border-input-hover': c.borderInputHover,
     '--text-primary': c.textPrimary,
@@ -144,26 +162,31 @@ function cssVarsFor(mode: ThemeMode): Record<string, string> {
     '--primary': c.primary,
     '--primary-hover': c.primaryHover,
     '--primary-pressed': c.primaryPressed,
+    '--primary-glow': c.primaryGlow,
     '--fill-hover': c.fillHover,
+    '--fill-secondary': c.fillSecondary,
     '--fill-selected': c.fillSelected,
     '--success': c.success,
     '--warning': c.warning,
     '--danger': c.danger,
+    '--error': c.danger,
     '--info': c.info,
+    '--shadow-sm': c.shadowSm,
+    '--shadow-md': c.shadowMd,
     '--scroll-thumb': c.scrollThumb,
     '--scroll-thumb-hover': c.scrollThumbHover,
     '--scroll-thumb-active': c.scrollThumbActive,
     // Terminal deploy luôn tối ở cả hai theme — đây là quy ước của công cụ terminal.
-    '--term-bg': '#0B0E14',
-    '--term-toolbar': '#111722',
-    '--term-border': '#1F2838',
-    '--term-text': '#CBD5E1',
-    '--term-muted': '#7C8AA0',
-    '--term-btn-bg': '#151D2A',
-    '--term-btn-border': '#2C3A50',
-    '--term-live': '#34D399',
-    '--term-failed': '#F87171',
-    '--term-idle': '#64748B'
+    '--term-bg': '#0C0D10',
+    '--term-toolbar': '#15171C',
+    '--term-border': '#262932',
+    '--term-text': '#E2E6EE',
+    '--term-muted': '#8B949E',
+    '--term-btn-bg': '#1F232B',
+    '--term-btn-border': '#323846',
+    '--term-live': '#3FB950',
+    '--term-failed': '#F85149',
+    '--term-idle': '#6E7681'
   }
 }
 
@@ -176,15 +199,18 @@ function antdThemeFor(mode: ThemeMode): ThemeConfig {
       fontFamilyCode: FONT_MONO,
       fontSize: 13,
       fontSizeSM: 12,
-      borderRadius: 3,
-      borderRadiusSM: 2,
-      borderRadiusLG: 4,
-      controlHeight: 30,
+      borderRadius: 6,
+      borderRadiusSM: 4,
+      borderRadiusLG: 8,
+      controlHeight: 32,
+      controlHeightSM: 26,
+      controlHeightLG: 38,
       colorPrimary: c.primary,
       colorPrimaryHover: c.primaryHover,
       colorPrimaryActive: c.primaryPressed,
-      colorInfo: c.accent,
-      colorLink: c.accent,
+      colorInfo: c.info,
+      colorLink: c.info,
+      colorLinkHover: c.primaryHover,
       colorSuccess: c.success,
       colorWarning: c.warning,
       colorError: c.danger,
@@ -203,52 +229,67 @@ function antdThemeFor(mode: ThemeMode): ThemeConfig {
         siderBg: c.sidebar,
         bodyBg: c.content,
         headerBg: c.window,
-        // Nút collapse của Sider — mặc định antd là navy #002140, phá tông xám.
         triggerBg: c.sidebar,
         triggerColor: c.textSecondary
       },
       Menu: {
         itemHeight: 34,
         itemMarginInline: 8,
-        itemBorderRadius: 4,
+        itemBorderRadius: 6,
         itemPaddingInline: 10,
-        // itemBg transparent để nền sider (Layout.siderBg) hiện xuyên — không bị
-        // khối màu riêng của menu.
         itemBg: 'transparent',
         itemColor: c.textSecondary,
         itemHoverColor: c.textPrimary,
         itemHoverBg: c.fillHover,
-        // Item đang chọn: nền fill trầm, đồng bộ với hàng bảng được chọn.
         itemSelectedColor: c.textPrimary,
         itemSelectedBg: c.fillSelected,
         activeBarBorderWidth: 0
       },
       Button: {
-        // Bóng của antd mặc định là "đths web" — bỏ hết, giữ nút phẳng viền mảnh.
+        borderRadius: 6,
+        borderRadiusSM: 4,
         primaryShadow: 'none',
         defaultShadow: 'none',
         dangerShadow: 'none'
       },
       Card: {
+        borderRadiusLG: 8,
         paddingLG: 16,
-        headerFontSize: 13,
-        headerHeight: 40
+        headerFontSize: 13.5,
+        headerHeight: 42
       },
       Table: {
-        // Bảng clean kiểu desktop tool: header trong suốt, chỉ kẻ ngang giữa các hàng.
-        headerBg: 'transparent',
+        headerBg: c.elevated,
         headerColor: c.textSecondary,
         headerSplitColor: 'transparent',
+        headerBorderRadius: 0,
         rowHoverBg: c.fillHover,
-        cellPaddingBlock: 12,
+        cellPaddingBlock: 10,
         cellPaddingInline: 12
       },
+      Modal: {
+        borderRadiusLG: 8,
+        contentBg: c.panel,
+        headerBg: c.panel
+      },
+      Drawer: {
+        colorBgElevated: c.panel
+      },
       Tag: {
-        // antd để Tag co theo fontSizeSM — cứng lại 12px, hết chữ li ti 10px.
+        borderRadiusSM: 4,
         fontSize: 12
       },
+      Tabs: {
+        itemSelectedColor: c.textPrimary,
+        itemHoverColor: c.textPrimary,
+        inkBarColor: c.primary
+      },
       Segmented: {
-        itemSelectedBg: c.elevated
+        trackBg: c.content,
+        itemSelectedBg: c.elevated,
+        itemSelectedColor: c.textPrimary,
+        borderRadius: 6,
+        borderRadiusSM: 4
       }
     }
   }

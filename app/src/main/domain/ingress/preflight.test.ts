@@ -667,4 +667,12 @@ describe('preflightSharedIngress', () => {
       route_activation: 'not_evaluated'
     })
   })
+
+  it('keeps sudo -n sh -c single-quoted commands free of unescaped inner single quotes', () => {
+    for (const command of Object.values(INGRESS_READ_COMMANDS)) {
+      if (!command.startsWith("sudo -n sh -c '")) continue
+      const inner = command.slice("sudo -n sh -c '".length, -1)
+      expect(inner).not.toContain("'")
+    }
+  })
 })

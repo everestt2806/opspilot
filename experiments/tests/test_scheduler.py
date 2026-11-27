@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
-from faults.scheduler import FAULT_DURATION_S, plan_fault
+from faults.scheduler import FAULT_DURATION_S, FaultAction, FaultPlan, plan_fault
 
 
 def test_memory_leak_every_10s():
@@ -147,3 +147,35 @@ def test_apply_plan_aborts_when_check_fn_raises():
         )
 
     assert check_call_count == 2
+
+
+def test_apply_plan_handles_clock_advancing_inside_check_fn(monkeypatch):
+    """Không gọi sleep_fn với số âm nếu check_fn (ví dụ SSH docker inspect) đẩy now_fn vượt target."""
+    import types
+
+    import faults.scheduler as sched
+
+    fake_now = {"t": 0.0}
+    recorded_sleeps = []
+
+    def now_fn():
+        return fake_now["t"]
+
+    def check_fn():
+        fake_now["t"] += 12.0
+
+    def sleep_fn(step):
+        assert step >= 0.0
+        recorded_sleeps.append(step)
+        fake_now["t"] += step
+
+    fake_requests = types.SimpleNamespace(
+        get=lambda url, timeout=5: types.SimpleNamespace(status_code=200)
+    )
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+    plan = FaultPlan(
+        "cpu_spike",
+        (FaultAction(offset_s=0, path="/debug/cpu?ms=20"), FaultAction(offset_s=5, path="/debug/cpu?ms=40")),
+    )
+    sched.apply_plan("http://app:3000", plan, sleep_fn=sleep_fn, now_fn=now_fn, check_fn=check_fn)
+    assert all(s >= 0.0 for s in recorded_sleeps)

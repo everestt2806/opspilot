@@ -34,6 +34,7 @@ import { localDateTime, relativeTime } from '../utils/format'
 import { formatGb, formatMb, resourcePercents, type RowResourceState } from '../vpsResources'
 import { VpsOverviewActionBar } from './VpsOverviewActionBar'
 import { VpsServerHeader } from './VpsServerHeader'
+import { VpsPreparationPanel } from './VpsPreparationPanel'
 
 interface VpsOverviewTabProps {
   vps: Vps
@@ -199,7 +200,7 @@ export function VpsOverviewTab({
   }
 
   return (
-    <div>
+    <div className="vps-overview-stack">
       {contextHolder}
 
       {/* Thanh action icon — đầu container nội dung Tổng quan, trên các card thông tin */}
@@ -216,12 +217,18 @@ export function VpsOverviewTab({
 
       {/* Thông tin nhanh (IP/port/lệnh SSH) — chỉ thuộc tab Tổng quan, nằm trên Machine info */}
       <VpsServerHeader vps={vps} />
+      <VpsPreparationPanel
+        vpsId={vps.id}
+        onPrepared={() => {
+          runScan()
+          onRefreshResources()
+        }}
+      />
 
       {/* Tài nguyên hệ thống (CPU / RAM / Disk) — từ IPC vps:get-resources */}
       <Card
         title={strings.vpsControl.overview.resourcesTitle}
         size="small"
-        style={{ marginTop: 12 }}
         extra={
           <Space size="middle">
             {resources?.status === 'success' && resources.fetchedAt ? (
@@ -331,7 +338,6 @@ export function VpsOverviewTab({
       <Card
         title={strings.vpsControl.overview.diagnosticsTitle}
         size="small"
-        style={{ marginTop: 12 }}
         extra={
           <Button size="small" icon={<ReloadOutlined />} onClick={() => void runDiagnostics()}>
             {currentDiagnostics?.phase === 'success'
@@ -438,7 +444,6 @@ export function VpsOverviewTab({
       <Card
         title={strings.vpsControl.overview.machineTitle}
         size="small"
-        style={{ marginTop: 12 }}
         styles={{ body: { paddingTop: 12 } }}
       >
         <Descriptions column={2} size="small" bordered>
@@ -485,7 +490,6 @@ export function VpsOverviewTab({
       <Card
         title={strings.vpsControl.scan.title}
         size="small"
-        style={{ marginTop: 12 }}
         extra={
           <Button
             size="small"
@@ -570,10 +574,7 @@ function ResourceGauges({ data }: { data: VpsResources }): React.JSX.Element {
   ]
 
   return (
-    <div
-      className="panel-gauge-row"
-      style={{ justifyContent: 'space-around', margin: '8px 0 12px' }}
-    >
+    <div className="panel-gauge-row">
       {gauges.map((gauge) => (
         <div key={gauge.label} className="panel-gauge">
           <Progress

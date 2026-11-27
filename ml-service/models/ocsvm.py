@@ -2,7 +2,7 @@
 
 gamma=0.001 thay cho 'scale' (1/20): đo 80 seeds trên dữ liệu giả, 'scale' cho ~71% mẫu
 bình thường unseen chạm trần 1.0 (kernel quá khít trong không gian 20 chiều, 201 mẫu),
-0.001 hạ còn ~40% mà anomaly rõ vẫn 1.0. Xem DECISIONS.md (20/08).
+0.001 hạ còn ~40% mà anomaly rõ vẫn đạt 1.0.
 """
 
 from __future__ import annotations

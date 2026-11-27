@@ -1,6 +1,7 @@
 import { Card, Segmented, Typography } from 'antd'
 
 import { PageHeader } from '../components/PageHeader'
+import { ControllerPanel } from '../components/ControllerPanel'
 import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
 import type { LocaleMode } from '../store/uiState'
@@ -77,6 +78,7 @@ export function SettingsPage(): React.JSX.Element {
           </div>
         </Card>
       </div>
+      <ControllerPanel />
     </section>
   )
 }

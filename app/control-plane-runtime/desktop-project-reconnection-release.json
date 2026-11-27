@@ -1,0 +1,8 @@
+{
+  "release_id": "linux-x64-node22-20261118-project-reconnection",
+  "node_version": "22.23.4",
+  "minimum_glibc": "2.39",
+  "release_sha256": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+  "installer_sha256": "f53555b55585528ef604eb2546388ab11fb5f8114ff139c4e1911435523c8207",
+  "upgrade_supported": true
+}

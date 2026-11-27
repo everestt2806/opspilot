@@ -1,0 +1,13 @@
+# R7h-3e3c1 ? N?ng helper gi? app ?ang ch?y
+
+Gate v?n h?nh development VPS ?? duy?t, d?ng pinned SSH, Main production classes v? Unix997 CLI th?t. Kh?ng d?ng h? s? Desktop ?ang s? d?ng, kh?ng deploy th?m app, ??i source/env hay m? public admin port. ??y l? CLI acceptance, ch?a thay th? UI helper UX c?a c2.
+
+Tr??c khi ch?y ph?i c? proof b PASS v?i exact release3782655/payload5b876a1/tool2a5eb9f, Root19/Main19/runtime35/40SIGKILL. Resources ???c ki?m theo compiled8entry catalog, thi?u/tamper t? ch?i tr??c SSH mutation. Baseline c? ??nh: schema35/releaseeb08d06/currentd7afa8d4,6apps12CID/policiespaused/0active.
+
+Node22 tr?n Windows: `node app/scripts/product-helper-upgrade-live/launch.mjs --start`. Ch? nh?p credential JSON sau PRIVATE_INPUT_READY_NO_ECHO; kh?ng ??a m?t kh?u v?o argv, env ho?c file. Launcher truy?n stdin sang Electron-as-Node ?? ??ng SQLite ABI. Profile ri?ng d?ng DPAPI key v? encrypted credential; ch? d?n sau PASS. Kh?ng c? key HMAC/env value trong desktop packet/report; controller t? t?i key997 v? g?i key bounded stdin t?i target engine.
+
+Lu?ng: readonly fingerprint/current receipt attestation v? helper metadata ? Main adoption/scoped client ? transfer/upgrade/inspect c?ng UUID ? refresh binding gi? token/client ? t?ng legacy target review/prepare/apply/cold lookup b?ng internal production CLI d??i UID997. Candidate v? current Root journal ???c relay ki?m tr??c CLI, script d?ng setpriv argv c? ??nh. App5/6 c? helper env hi?n t?i gi? nguy?n pin. M?i b??c gi? content digest env/source, key/marker/guards/lock inode,6apps12CID/Image/StartedAt/restarts v? original installation/DB/key. Target journal/proof/SQLite exact CAS l? authority; kh?ng s?a SQL pin ho?c re-enroll ?? nh?n helper m?i.
+
+`--resume <nonce>` ch? nh?n private journal ch?a PASS. UUID ghi durable tr??c dispatch, registration/transfer/upgrade/helper unknown kh?ng t? t?o UUID hay ch?y l?i write. Helper apply ?? attempted s? ch? inspect. Khi ?? x?c minh partial v? c?n thao t?c ph?c h?i, d?ng `--resume <nonce> --recover-app <1..4>` ho?c `--cancel-app <1..4>`; cancel settled old pin kh?ng ???c b?o upgrade PASS. Controller transfer/upgrade unknown ph?i d?ng journal/production Main inspect tr??c; ch? sau khi x?c minh m?i d?ng --resume <nonce> --transfer-controller ho?c --recover-controller c?ng UUID. Kh?ng b? barrier hay t? retry.
+
+Cu?i gate: b?n helper c? f591, hai helper ?? capable gi? pin, allHTTP200/0active/policiespaused; scoped client revoke, SSH disconnect, private SQLite/DPAPI key d?n ??ng nonce; report ch? metadata v? raw hashes. Kh?ng fault/deploy l?i c?c app c? s?n, reboot VPS ho?c th? ML trong l??t n?y. No GUI/soak/managedPG/formalML/whole release readiness claim.

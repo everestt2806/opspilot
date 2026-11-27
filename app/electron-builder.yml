@@ -9,30 +9,32 @@ files:
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
 extraResources:
+  - from: resources/controller-releases
+    to: controller-releases
+    filter:
+      - '**/*'
   - from: src/main/controlPlane
     to: product-target
     filter:
       - target_execution_guard.py
       - target_guarded_ssh_helper.py
       - target_product_runtime.py
-  - from: ../ml-service
-    to: ml-service
+  - from: resources/ml-runtime
+    to: ml-runtime
     filter:
       - '**/*'
-      - '!**/__pycache__/**'
-      - '!**/.pytest_cache/**'
-      - '!state/**'
   - from: ../templates
     to: templates
     filter:
       - '**/*'
-  - from: ../collector
-    to: collector
-    filter:
-      - '**/*'
-      - '!**/__pycache__/**'
-      - '!**/.pytest_cache/**'
+  - from: ../collector/collect.py
+    to: collector/collect.py
+  - from: ../collector/Dockerfile
+    to: collector/Dockerfile
+  - from: ../collector/requirements.txt
+    to: collector/requirements.txt
 npmRebuild: false
+beforePack: ./scripts/controller-installer-before-pack.cjs
 win:
   icon: resources/icon.png
   target:
@@ -41,6 +43,7 @@ win:
         - x64
   executableName: OpsPilot
 nsis:
+  include: resources/installer.nsh
   artifactName: OpsPilot-${version}-setup.${ext}
   shortcutName: OpsPilot
   uninstallDisplayName: OpsPilot

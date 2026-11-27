@@ -1,3 +1,5 @@
+import type { ProductEnvironmentRuntime } from './productEnvironmentRuntime'
+import type { ProductPostgresRuntime } from './productPostgresRuntime'
 import type Database from 'better-sqlite3'
 import type {
   H2BuildEvidence,
@@ -47,6 +49,9 @@ export type ProductDeployPipelineOptions = {
   target_state_root: string
   signal?: AbortSignal
   collector_directory?: string
+  templates_directory?: string
+  environment?: ProductEnvironmentRuntime
+  postgres?: ProductPostgresRuntime
   build_timeout_ms?: number
   build_poll_interval_ms?: number
   runtime_poll_timeout_ms?: number
@@ -65,7 +70,14 @@ export async function executeProductDeployPipeline(
   snapshot: PreparedProductGitSnapshot,
   options: ProductDeployPipelineOptions
 ): Promise<ProductDeployPipelineResult> {
-  validatePreflightSourceAndPlan(database, snapshot, options.collector_directory)
+  validatePreflightSourceAndPlan(
+    database,
+    snapshot,
+    options.collector_directory,
+    options.templates_directory,
+    options.environment?.resolve(),
+    options.postgres?.resolve()
+  )
   const session = await openProductGuardedSshSession(deployRepository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,
@@ -77,6 +89,9 @@ export async function executeProductDeployPipeline(
     // 1. Stage source and render files within the same session
     await stageProductSourceAndRenderWithSession(session, database, snapshot, {
       collector_directory: options.collector_directory,
+      templates_directory: options.templates_directory,
+      environment: options.environment,
+      postgres: options.postgres,
       signal: options.signal
     })
 
@@ -240,7 +255,22 @@ export async function recoverProductRuntimeSession(
   state: 'settled' | 'already_settled'
   terminal: H2TerminalRecord
 }> {
-  const terminal = runtimeRepository.getTerminal(snapshot.claim.attempt_id)
+  return recoverProductRuntimeTerminal(runtimeRepository, ssh, snapshot.claim.attempt_id, options)
+}
+
+/** Cold startup chỉ cần persisted identity; không dựng snapshot giả hoặc fetch lại source. */
+export async function recoverProductRuntimeTerminal(
+  runtimeRepository: ProductRuntimeRepository,
+  ssh: SshManager,
+  attemptId: string,
+  options: {
+    vps_id: number
+    target_helper_path: string
+    target_state_root: string
+    signal?: AbortSignal
+  }
+): Promise<{ state: 'settled' | 'already_settled'; terminal: H2TerminalRecord }> {
+  const terminal = runtimeRepository.getTerminal(attemptId)
   if (!terminal) {
     throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
   }
@@ -261,13 +291,13 @@ export async function recoverProductRuntimeSession(
   })
 
   try {
-    const attestation = runtimeRepository.commitAttestation(snapshot.claim.attempt_id)
+    const attestation = runtimeRepository.commitAttestation(attemptId)
     const settlementAck = await session.settleRuntime(attestation)
     runtimeRepository.completeSettlement(context, settlementAck)
     await session.close()
     return {
       state: 'settled',
-      terminal: runtimeRepository.getTerminal(snapshot.claim.attempt_id)!
+      terminal: runtimeRepository.getTerminal(attemptId)!
     }
   } catch (error) {
     if (session.state === 'active') {

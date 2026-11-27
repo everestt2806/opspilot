@@ -23,6 +23,15 @@ import {
   h2BoundarySchema
 } from '../controlPlane/productH2Proof'
 import { ProductDeployRepository } from './productDeployRepository'
+import {
+  readBoundProductEnvironmentSource,
+  readProductPostgresSourceBinding
+} from '../controlPlane/productSourceBindings'
+import { postgresReferenceSchema, PRODUCT_POSTGRES_IMAGE } from '../controlPlane/productPostgres'
+import {
+  readProductSourceConfiguration,
+  type ProductSourceBasis
+} from '../controlPlane/productSourceConfiguration'
 
 type ExecutionRow = {
   context_json: string
@@ -87,10 +96,12 @@ export class ProductRuntimeRepository {
         ).readGitDispatchTargetBinding(claim, deploymentId)
         if (binding.state !== 'ready') this.fail('H2_AUTHORITY_STALE')
         const row = this.canonical(claim.app_id, deploymentId)
+        const database = this.registeredDatabase(claim, binding.binding)
         if (
           !row ||
-          row.framework !== 'express' ||
-          row.needs_db !== 0 ||
+          row.framework !== this.registeredFramework(claim) ||
+          (row.framework === 'static-spa' && row.container_port !== 80) ||
+          row.needs_db !== (database ? 1 : 0) ||
           row.deployment_status !== 'building' ||
           build.image_tag !== row.image_tag ||
           build.target_sha !== row.git_commit_sha ||
@@ -98,11 +109,14 @@ export class ProductRuntimeRepository {
             (!Number.isSafeInteger(build.exit_code) || build.exit_code === 0))
         )
           this.fail('H2_BUILD_INVALID')
+        const environment = this.registeredEnvironment(claim, binding.binding)
         const existing = this.execution(claim.attempt_id)
         if (existing) {
           const context = this.parseContext(existing.context_json)
           if (
             canonicalH2Json(context.claim) !== canonicalH2Json(claim) ||
+            canonicalH2Json(context.environment ?? null) !== canonicalH2Json(environment) ||
+            canonicalH2Json(context.database ?? null) !== canonicalH2Json(database) ||
             context.build_state !== build.state ||
             context.source_sha !== build.target_sha ||
             context.candidate_image_tag !== build.image_tag ||
@@ -137,7 +151,9 @@ export class ProductRuntimeRepository {
                 },
           activation_id: null,
           health_timeout_ms: 15_000,
-          exposure_policy: 'not_checked'
+          exposure_policy: 'not_checked',
+          ...(environment ? { environment } : {}),
+          ...(database ? { database } : {})
         })
         const previous = this.database
           .prepare(
@@ -412,6 +428,13 @@ export class ProductRuntimeRepository {
     try {
       const context = this.parseContext(input),
         row = this.terminal(context.claim.attempt_id)
+      if (
+        canonicalH2Json(context.environment ?? null) !==
+          canonicalH2Json(this.registeredEnvironment(context.claim, context.target)) ||
+        canonicalH2Json(context.database ?? null) !==
+          canonicalH2Json(this.registeredDatabase(context.claim, context.target))
+      )
+        return 'rejected'
       if (!row || row.context_sha256 !== hashH2(context)) return 'rejected'
       const receipt = this.record(row).envelope.receipt
       const state = this.database
@@ -451,8 +474,8 @@ export class ProductRuntimeRepository {
         source_config_sha256: context.claim.source_config_sha256,
         app_id: context.claim.app_id,
         app_name: context.app_name,
-        framework: 'express',
-        needs_db: 0,
+        framework: this.registeredFramework(context.claim),
+        needs_db: context.database ? 1 : 0,
         host_port: context.host_port,
         container_port: context.container_port,
         healthcheck_path: context.healthcheck_path,
@@ -726,6 +749,13 @@ export class ProductRuntimeRepository {
   }
 
   private assertLive(context: H2Context): void {
+    if (
+      canonicalH2Json(context.environment ?? null) !==
+        canonicalH2Json(this.registeredEnvironment(context.claim, context.target)) ||
+      canonicalH2Json(context.database ?? null) !==
+        canonicalH2Json(this.registeredDatabase(context.claim, context.target))
+    )
+      this.fail('H2_AUTHORITY_STALE')
     const result = ProductDeployRepository.withClockForTest(
       this.database,
       this.clock
@@ -739,6 +769,7 @@ export class ProductRuntimeRepository {
       canonical.host_port !== context.host_port ||
       canonical.container_port !== context.container_port ||
       canonical.healthcheck_path !== context.healthcheck_path ||
+      canonical.needs_db !== (context.database ? 1 : 0) ||
       canonical.git_commit_sha !== context.source_sha ||
       canonical.image_tag !== context.candidate_image_tag ||
       canonical.current_deployment_id !== (context.previous?.deployment_id ?? null) ||
@@ -758,6 +789,138 @@ export class ProductRuntimeRepository {
       LEFT JOIN deployment old ON old.id=a.current_deployment_id AND old.app_id=a.id WHERE a.id=?`
       )
       .get(deploymentId, appId) as CanonicalRow | undefined
+  }
+  private registeredEnvironment(
+    claim: ProductClaimToken,
+    target: H2Context['target']
+  ): H2Context['environment'] | null {
+    const source = this.database
+      .prepare(
+        'SELECT deploy_config_json,config_sha256 FROM product_source_config WHERE app_id=? AND source_generation=?'
+      )
+      .get(claim.app_id, claim.source_generation) as
+      { deploy_config_json: string; config_sha256: string } | undefined
+    if (!source || source.config_sha256 !== claim.source_config_sha256)
+      this.fail('H2_BUILD_INVALID')
+    let config: Record<string, unknown>
+    try {
+      config = JSON.parse(source.deploy_config_json)
+    } catch {
+      this.fail('H2_BUILD_INVALID')
+    }
+    if (!config || typeof config !== 'object' || Array.isArray(config))
+      this.fail('H2_BUILD_INVALID')
+    if (!Object.hasOwn(config, 'environment')) return null
+    const ref = config.environment as H2Context['environment']
+    const bound = readBoundProductEnvironmentSource(
+      this.database,
+      {
+        controller_id: claim.controller_id,
+        app_id: claim.app_id,
+        ownership_generation: claim.ownership_generation,
+        target
+      },
+      claim.source_generation,
+      claim.source_config_sha256,
+      ref!,
+      config.database === undefined ? undefined : postgresReferenceSchema.parse(config.database)
+    )
+    if (
+      !ref ||
+      typeof ref !== 'object' ||
+      Array.isArray(ref) ||
+      Object.keys(ref).sort().join(',') !== 'controller_id,ownership_generation,revision' ||
+      ref.controller_id !== claim.controller_id ||
+      ref.ownership_generation !== claim.ownership_generation ||
+      !Number.isSafeInteger(ref.revision) ||
+      ref.revision < 1 ||
+      hashH2(config) !== claim.source_config_sha256 ||
+      !bound ||
+      bound.controller_id !== ref.controller_id ||
+      bound.ownership_generation !== ref.ownership_generation ||
+      bound.environment_revision !== ref.revision ||
+      bound.source_config_sha256 !== claim.source_config_sha256 ||
+      bound.target_binding_json !== canonicalH2Json(target)
+    )
+      this.fail('H2_BUILD_INVALID')
+    return ref
+  }
+  private registeredDatabase(
+    claim: ProductClaimToken,
+    target: H2Context['target']
+  ): H2Context['database'] | null {
+    const source = this.database
+      .prepare(
+        'SELECT deploy_config_json,config_sha256 FROM product_source_config WHERE app_id=? AND source_generation=?'
+      )
+      .get(claim.app_id, claim.source_generation) as
+      { deploy_config_json: string; config_sha256: string } | undefined
+    if (!source || source.config_sha256 !== claim.source_config_sha256)
+      this.fail('H2_BUILD_INVALID')
+    const raw = JSON.parse(source.deploy_config_json)
+    if (!Object.hasOwn(raw, 'database')) return null
+    const app = this.database
+      .prepare(
+        'SELECT framework,host_port,container_port,healthcheck_path,needs_db FROM app WHERE id=?'
+      )
+      .get(claim.app_id) as ProductSourceBasis
+    const config = readProductSourceConfiguration(app, source.deploy_config_json),
+      reference = config.database
+    if (!reference || hashH2(config) !== claim.source_config_sha256) this.fail('H2_BUILD_INVALID')
+    readProductPostgresSourceBinding(
+      this.database,
+      {
+        controller_id: claim.controller_id,
+        app_id: claim.app_id,
+        ownership_generation: claim.ownership_generation,
+        target
+      },
+      claim.source_generation,
+      claim.source_config_sha256,
+      reference
+    )
+    const resource = this.database
+      .prepare(
+        'SELECT controller_id,app_id,ownership_generation,target_binding_json,framework,image FROM product_managed_postgres WHERE database_id=?'
+      )
+      .get(reference.database_id) as Record<string, unknown> | undefined
+    if (
+      !resource ||
+      resource.controller_id !== claim.controller_id ||
+      resource.app_id !== claim.app_id ||
+      resource.ownership_generation !== claim.ownership_generation ||
+      resource.target_binding_json !== canonicalH2Json(target) ||
+      resource.framework !== config.framework ||
+      resource.image !== PRODUCT_POSTGRES_IMAGE
+    )
+      this.fail('H2_BUILD_INVALID')
+    return reference
+  }
+  /** Framework lấy từ source generation đã khóa bởi claim, không suy ra từ app đang sửa. */
+  private registeredFramework(claim: ProductClaimToken): 'express' | 'static-spa' | 'nextjs' {
+    const row = this.database
+      .prepare(
+        'SELECT deploy_config_json,config_sha256 FROM product_source_config WHERE app_id=? AND source_generation=?'
+      )
+      .get(claim.app_id, claim.source_generation) as
+      { deploy_config_json: string; config_sha256: string } | undefined
+    if (!row || row.config_sha256 !== claim.source_config_sha256) this.fail('H2_BUILD_INVALID')
+    let config: Record<string, unknown>
+    try {
+      config = JSON.parse(row.deploy_config_json)
+    } catch {
+      this.fail('H2_BUILD_INVALID')
+    }
+    if (!config || Array.isArray(config) || typeof config !== 'object')
+      this.fail('H2_BUILD_INVALID')
+    // Source legacy thiếu framework chỉ thuộc Express; framework mới luôn cần canonical hash.
+    if (config.framework === undefined || config.framework === 'express') return 'express'
+    if (
+      (config.framework === 'static-spa' || config.framework === 'nextjs') &&
+      hashH2(config) === claim.source_config_sha256
+    )
+      return config.framework
+    return this.fail('H2_BUILD_INVALID')
   }
   private assertExecution(context: H2Context): ExecutionRow {
     const execution = this.execution(context.claim.attempt_id)

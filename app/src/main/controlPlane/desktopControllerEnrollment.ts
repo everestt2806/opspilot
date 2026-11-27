@@ -1,0 +1,1087 @@
+import type {
+  ProductPostgresPrepareInput,
+  ProductPostgresPrepareResult,
+  ProductPostgresMetadata,
+  ProductPostgresSelectionInput,
+  ProductPostgresSelectionResult,
+  ProductProjectConfigurationContext,
+  ProductProjectConfigurationContextInput
+} from '../../../../docs/contracts/product-postgres'
+import type {
+  ProductProjectReconnectionInput,
+  ProductProjectReconnectionContext
+} from '../../../../docs/contracts/product-project-reconnection'
+import {
+  projectReconnectionInputSchema,
+  projectReconnectionContextSchema,
+  type ProjectReconnectionError
+} from './projectReconnection'
+import type { ProductEnvironmentScope } from '../../../../docs/contracts/product-environment'
+import type {
+  ProductPostgresInspectionRequest,
+  ProductPostgresInspectionResult
+} from '../../../../docs/contracts/product-postgres-inspection'
+import {
+  postgresInspectionRequestSchema,
+  postgresInspectionResultSchema,
+  postgresInspectionErrorCodes,
+  validatePostgresInspectionResult
+} from './productPostgresInspectorCommands'
+import {
+  postgresAdminErrorCodes,
+  postgresMetadataSchema,
+  postgresPrepareSchema,
+  postgresPrepareResultSchema,
+  postgresPrepareLookupSchema,
+  postgresStateSchema,
+  postgresSelectionSchema,
+  postgresSelectionResultSchema,
+  postgresSelectionLookupSchema,
+  projectConfigurationContextSchema
+} from './productPostgres'
+import type {
+  ProductEnvironmentContextInput,
+  ProductEnvironmentStageInput,
+  ProductEnvironmentStageResult,
+  ProductEnvironmentStateInput,
+  ProductEnvironmentState
+} from '../../../../docs/contracts/product-environment'
+import type {
+  ProductEnvironmentReview,
+  ProductEnvironmentSelectionInput,
+  ProductEnvironmentSelectionResult
+} from '../../../../docs/contracts/product-environment'
+import {
+  environmentContextSchema,
+  environmentScopeSchema as environmentContextScope,
+  environmentStageSchema,
+  environmentStateSchema,
+  environmentStateResultSchema,
+  environmentStageResultSchema,
+  environmentReviewSchema,
+  environmentSelectionSchema,
+  environmentSelectionResultSchema,
+  type ProductEnvironmentError
+} from './productEnvironment'
+import { vpsRegistrationInputSchema, vpsRegistrationResultSchema } from './vpsRegistration'
+import type {
+  ProductVpsRegistrationInput,
+  ProductVpsRegistrationResult
+} from '../../../../docs/contracts/product-vps-registration'
+import { projectReadinessSchema, type ProjectReadinessError } from './projectReadiness'
+import type {
+  ProductProjectReadiness,
+  ProductProjectReadinessInput
+} from '../../../../docs/contracts/product-project-readiness'
+import { createHash } from 'node:crypto'
+import { administerInstalledController } from './controllerSshBootstrap'
+import { canonicalH2Json } from './productH2Proof'
+import { TextDecoder } from 'node:util'
+import { z } from 'zod'
+import type { ClientChannel } from 'ssh2'
+import type { SshManager, SshVerifiedConnectionIdentity } from '../ssh/manager'
+import type {
+  ProductDesktopControllerBindingIntent,
+  ProductDesktopControllerBindingMetadata
+} from '../../../../docs/contracts/product-controller-api'
+import script from './desktop_controller_admin.py?raw'
+import catalog from '../../../control-plane-runtime/bundle-files.json'
+import { projectRegistrationResultSchema, projectTargetsResultSchema } from './projectRegistration'
+import { projectTargetStateSchema, type ProjectTargetError } from './projectTarget'
+import type {
+  ProductProjectTargetInput,
+  ProductProjectTargetEnrollmentInput,
+  ProductProjectTargetState
+} from '../../../../docs/contracts/product-project-target'
+import {
+  projectSourceVerificationResultSchema,
+  type ProjectSourceVerificationError
+} from './projectSourceVerification'
+import type {
+  ProductProjectSourceVerificationInput,
+  ProductProjectSourceVerificationResult
+} from '../../../../docs/contracts/product-project-source-verification'
+import type {
+  ProductProjectRegistrationInput,
+  ProductProjectRegistrationResult,
+  ProductProjectTargetsResult
+} from '../../../../docs/contracts/product-project-registration'
+import {
+  DesktopControllerVault,
+  DesktopControllerVaultError,
+  desktopEnrollmentResponseSchema
+} from './desktopControllerVault'
+
+const code = script.replace(
+  'APPROVED_ASSETS = ()',
+  'APPROVED_ASSETS = ' + JSON.stringify(Object.keys(catalog).sort())
+)
+const pinnedScript = { text: code, sha256: createHash('sha256').update(code).digest('hex') }
+const replaySchema = z.strictObject({
+  state: z.literal('credential_delivery_unknown'),
+  controller_id: z.string(),
+  client_id: z.uuid()
+})
+export class DesktopControllerEnrollmentError extends Error {
+  constructor(
+    readonly code:
+      | ProductEnvironmentError['code']
+      | (typeof postgresAdminErrorCodes)[number]
+      | (typeof postgresInspectionErrorCodes)[number]
+      | ProjectReconnectionError['code']
+      | 'CONTROLLER_SECRET_KEY_UNAVAILABLE'
+      | 'CONTROLLER_ADMIN_FAILED'
+      | 'CONTROLLER_IDENTITY_MISMATCH'
+      | 'CONTROLLER_BUNDLE_VERIFICATION_FAILED'
+      | 'CONTROLLER_NODE_UNSUPPORTED'
+      | 'VPS_REGISTRATION_REQUEST_INVALID'
+      | 'VPS_REGISTRATION_CONFLICT'
+      | 'VPS_REGISTRATION_CHANGED'
+      | 'VPS_REGISTRATION_UNAVAILABLE'
+      | 'CONTROLLER_VPS_INPUT_INVALID'
+      | 'CONTROLLER_VPS_CONTROLLER_MISMATCH'
+      | 'CONTROLLER_VPS_ENROLLMENT_ABORTED'
+      | 'CONTROLLER_VPS_ENROLLMENT_CONFLICT'
+      | 'CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE'
+      | 'CONTROLLER_VPS_SSH_VERIFICATION_FAILED'
+      | 'CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE'
+      | 'CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE'
+      | 'REQUEST_ABORTED'
+      | 'REQUEST_TIMEOUT'
+      | ProjectSourceVerificationError['code']
+      | ProjectTargetError['code']
+      | ProjectReadinessError['code']
+      | 'TARGET_ENROLLMENT_INPUT_INVALID'
+      | 'TARGET_ENROLLMENT_AUTHORITY_REJECTED'
+      | 'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE'
+      | 'TARGET_ENROLLMENT_CONFLICT'
+      | 'TARGET_ENROLLMENT_NOT_READY'
+      | 'TARGET_ENROLLMENT_TRANSACTION_ACTIVE'
+  ) {
+    super(code)
+  }
+}
+function samePrincipal(
+  first: SshVerifiedConnectionIdentity,
+  second: SshVerifiedConnectionIdentity
+): boolean {
+  return (Object.keys(first) as Array<keyof SshVerifiedConnectionIdentity>).every(
+    (key) => first[key] === second[key]
+  )
+}
+/** Trusted main only; secret-bearing reply is consumed directly by vault, never renderer. */
+export class DesktopControllerEnrollment {
+  constructor(
+    private readonly vault: DesktopControllerVault,
+    private readonly ssh: Pick<SshManager, 'openProductBootstrapChannel'>,
+    private readonly installedOptions: { bootstrapScript?: { text: string; sha256: string } } = {}
+  ) {}
+  async revoke(
+    bindingId: string,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<ProductDesktopControllerBindingMetadata> {
+    const before = this.vault.get(bindingId),
+      intent = this.vault.intent(bindingId)
+    if (!before.remote_client_id) throw new DesktopControllerVaultError('BINDING_UNAVAILABLE')
+    const digest = createHash('sha256')
+      .update(`desktop-revoke:${bindingId}:${before.remote_client_id}`)
+      .digest('hex')
+      .slice(0, 32)
+    const requestKey = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20)}`
+    const raw = await this.exchange(intent, options, {
+      operation: 'revoke-desktop-client',
+      payload: { request_key: requestKey, client_id: before.remote_client_id }
+    })
+    const reply = z
+      .strictObject({ client_id: z.uuid(), revoked_at: z.iso.datetime() })
+      .safeParse(raw)
+    if (!reply.success || reply.data.client_id !== before.remote_client_id)
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    const current = this.vault.get(bindingId)
+    if (current.remote_client_id !== before.remote_client_id)
+      throw new DesktopControllerVaultError('BINDING_CHANGED')
+    if (current.state === 'disabled') return current
+    return this.vault.disable(bindingId, current.revision)
+  }
+  async projectTargets(
+    bindingId: string,
+    query: { after_id: number | null; limit: number } | { target_id: number }
+  ): Promise<ProductProjectTargetsResult> {
+    return this.projectOperation(bindingId, 'project-targets', query, projectTargetsResultSchema)
+  }
+  async projectTargetState(
+    bindingId: string,
+    input: Omit<ProductProjectTargetInput, 'artifact' | 'manifest_sha256'>
+  ): Promise<ProductProjectTargetState> {
+    const intent = this.vault.intent(bindingId)
+    return this.projectOperation(
+      bindingId,
+      'project-target-state',
+      { ...input, artifact: intent.artifact_path, manifest_sha256: intent.manifest_sha256 },
+      projectTargetStateSchema
+    )
+  }
+  async enrollProjectTarget(
+    bindingId: string,
+    input: Omit<ProductProjectTargetEnrollmentInput, 'artifact' | 'manifest_sha256'>
+  ): Promise<ProductProjectTargetState> {
+    const intent = this.vault.intent(bindingId)
+    return this.projectOperation(
+      bindingId,
+      'enroll-project-target',
+      { ...input, artifact: intent.artifact_path, manifest_sha256: intent.manifest_sha256 },
+      projectTargetStateSchema
+    )
+  }
+  async projectReadiness(
+    bindingId: string,
+    input: Omit<ProductProjectReadinessInput, 'artifact' | 'manifest_sha256'>
+  ): Promise<ProductProjectReadiness> {
+    const intent = this.vault.intent(bindingId)
+    return this.projectOperation(
+      bindingId,
+      'project-readiness',
+      { ...input, artifact: intent.artifact_path, manifest_sha256: intent.manifest_sha256 },
+      projectReadinessSchema
+    )
+  }
+  async registerVps(
+    bindingId: string,
+    input: ProductVpsRegistrationInput,
+    beforeSend: () => void
+  ): Promise<ProductVpsRegistrationResult> {
+    const parsed = vpsRegistrationInputSchema.safeParse(input)
+    if (!parsed.success) throw new DesktopControllerEnrollmentError('CONTROLLER_VPS_INPUT_INVALID')
+    return this.projectOperation(
+      bindingId,
+      'register-vps',
+      parsed.data,
+      vpsRegistrationResultSchema,
+      beforeSend
+    )
+  }
+  async environmentContext(
+    bindingId: string,
+    input: ProductEnvironmentContextInput
+  ): Promise<ProductEnvironmentState> {
+    const parsed = environmentContextSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.configurationOperation(
+      bindingId,
+      'project-environment-context',
+      parsed.data,
+      environmentStateResultSchema
+    )
+  }
+  async environmentReview(
+    bindingId: string,
+    input: ProductEnvironmentContextInput
+  ): Promise<ProductEnvironmentReview> {
+    const parsed = environmentContextSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.configurationOperation(
+      bindingId,
+      'project-environment-review',
+      parsed.data,
+      environmentReviewSchema
+    )
+  }
+  async selectEnvironment(
+    bindingId: string,
+    input: ProductEnvironmentSelectionInput,
+    beforeSend: () => void
+  ): Promise<ProductEnvironmentSelectionResult> {
+    const parsed = environmentSelectionSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.configurationOperation(
+      bindingId,
+      'select-project-environment',
+      parsed.data,
+      environmentSelectionResultSchema,
+      beforeSend
+    )
+  }
+  async environmentSelectionState(
+    bindingId: string,
+    input: ProductEnvironmentSelectionInput
+  ): Promise<{
+    result: ProductEnvironmentSelectionResult | null
+    definitively_unapplied: boolean
+  }> {
+    const parsed = environmentSelectionSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.configurationOperation(
+      bindingId,
+      'project-environment-selection-state',
+      parsed.data,
+      z.strictObject({
+        result: environmentSelectionResultSchema.nullable(),
+        definitively_unapplied: z.boolean()
+      })
+    )
+  }
+  async environmentState(
+    bindingId: string,
+    input: ProductEnvironmentStateInput
+  ): Promise<ProductEnvironmentState> {
+    const parsed = environmentStateSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.configurationOperation(
+      bindingId,
+      'project-environment-state',
+      parsed.data,
+      environmentStateResultSchema
+    )
+  }
+  async stageEnvironment(
+    bindingId: string,
+    input: ProductEnvironmentStageInput,
+    beforeSend: () => void
+  ): Promise<ProductEnvironmentStageResult> {
+    const parsed = environmentStageSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.configurationOperation(
+      bindingId,
+      'stage-project-environment',
+      parsed.data,
+      environmentStageResultSchema,
+      beforeSend
+    )
+  }
+  async postgresContext(
+    bindingId: string,
+    input: ProductProjectConfigurationContextInput
+  ): Promise<ProductProjectConfigurationContext> {
+    const parsed = environmentContextSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    const result = await this.configurationOperation(
+      bindingId,
+      'project-configuration-context',
+      parsed.data,
+      projectConfigurationContextSchema
+    )
+    if (
+      result.controller_id !== this.vault.resolve(bindingId).controllerId ||
+      result.scope.app_id !== parsed.data.app_id ||
+      result.scope.ownership_generation !== parsed.data.expected_ownership_generation ||
+      result.scope.target.ssh_security_revision !== parsed.data.expected_target_security_revision ||
+      result.basis_source_generation !== parsed.data.expected_source_generation ||
+      result.basis_source_config_sha256 !== parsed.data.expected_source_config_sha256
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    return result
+  }
+  async reconnectionContext(
+    bindingId: string,
+    input: ProductProjectReconnectionInput,
+    beforeRead?: () => void
+  ): Promise<ProductProjectReconnectionContext> {
+    const parsed = projectReconnectionInputSchema.safeParse(input)
+    if (!parsed.success || parsed.data.controller_id !== this.vault.resolve(bindingId).controllerId)
+      throw new DesktopControllerEnrollmentError('PROJECT_RECONNECTION_INPUT_INVALID')
+    if (!this.vault.intent(bindingId).installation)
+      throw new DesktopControllerEnrollmentError('PROJECT_RECONNECTION_UNAVAILABLE')
+    const result = await this.configurationOperation(
+      bindingId,
+      'project-reconnection-context',
+      parsed.data,
+      projectReconnectionContextSchema,
+      beforeRead
+    )
+    if (
+      result.controller_id !== parsed.data.controller_id ||
+      result.app_id !== parsed.data.app_id ||
+      (parsed.data.expected_snapshot_sha256 !== undefined &&
+        result.snapshot_sha256 !== parsed.data.expected_snapshot_sha256)
+    )
+      throw new DesktopControllerEnrollmentError('PROJECT_RECONNECTION_AUTHORITY_CHANGED')
+    return result
+  }
+  async inspectPostgres(
+    bindingId: string,
+    input: ProductPostgresInspectionRequest,
+    beforeRead?: () => void
+  ): Promise<ProductPostgresInspectionResult> {
+    const parsed = postgresInspectionRequestSchema.safeParse(input)
+    if (
+      !parsed.success ||
+      parsed.data.context.controller_id !== this.vault.resolve(bindingId).controllerId
+    )
+      throw new DesktopControllerEnrollmentError('POSTGRES_INSPECTION_INPUT_INVALID')
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-inspection',
+      parsed.data,
+      postgresInspectionResultSchema,
+      beforeRead
+    )
+    return validatePostgresInspectionResult(result, parsed.data)
+  }
+  async preparePostgres(
+    bindingId: string,
+    input: ProductPostgresPrepareInput,
+    beforeSend: () => void
+  ): Promise<ProductPostgresPrepareResult> {
+    const parsed = postgresPrepareSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const result = await this.configurationOperation(
+      bindingId,
+      'prepare-managed-postgres',
+      parsed.data,
+      postgresPrepareResultSchema,
+      beforeSend
+    )
+    if (result.request_key !== parsed.data.request_key)
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    this.postgresMetadata(parsed.data.scope, result.metadata)
+    return result
+  }
+  async postgresPrepareState(
+    bindingId: string,
+    input: ProductPostgresPrepareInput
+  ): Promise<z.output<typeof postgresPrepareLookupSchema>> {
+    const parsed = postgresPrepareSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-prepare-state',
+      parsed.data,
+      postgresPrepareLookupSchema
+    )
+    if (result.result) {
+      if (result.result.request_key !== parsed.data.request_key)
+        throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+      this.postgresMetadata(parsed.data.scope, result.result.metadata)
+    }
+    return result
+  }
+  async postgresState(
+    bindingId: string,
+    scope: ProductEnvironmentScope
+  ): Promise<ProductPostgresMetadata | null> {
+    const parsed = postgresStateSchema.safeParse({ format: 1, scope })
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-state',
+      parsed.data,
+      z.strictObject({ metadata: postgresMetadataSchema.nullable() })
+    )
+    if (result.metadata) this.postgresMetadata(parsed.data.scope, result.metadata)
+    return result.metadata
+  }
+  async reviewPostgres(
+    bindingId: string,
+    input: ProductPostgresSelectionInput
+  ): Promise<import('../../../../docs/contracts/product-postgres').ProductPostgresReview> {
+    const request = this.postgresSelection(bindingId, input)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-review',
+      request,
+      z.strictObject({
+        scope: environmentContextScope,
+        source_generation: z.number().int().positive(),
+        source_config_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        metadata: postgresMetadataSchema,
+        auto_deploy_paused: z.literal(true),
+        deployment_started: z.literal(false)
+      })
+    )
+    if (
+      canonicalH2Json(result.scope) !== canonicalH2Json(input.scope) ||
+      result.source_generation !== input.expected_source_generation ||
+      result.source_config_sha256 !== input.expected_source_config_sha256 ||
+      result.metadata.database_id !== input.database_id
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    this.postgresMetadata(input.scope, result.metadata)
+    return result
+  }
+  async selectPostgres(
+    bindingId: string,
+    input: ProductPostgresSelectionInput,
+    beforeSend: () => void
+  ): Promise<ProductPostgresSelectionResult> {
+    const request = this.postgresSelection(bindingId, input)
+    const result = await this.configurationOperation(
+      bindingId,
+      'select-managed-postgres',
+      request,
+      postgresSelectionResultSchema,
+      beforeSend
+    )
+    this.postgresResult(input, result)
+    return result
+  }
+  async postgresSelectionState(
+    bindingId: string,
+    input: ProductPostgresSelectionInput
+  ): Promise<z.output<typeof postgresSelectionLookupSchema>> {
+    const request = this.postgresSelection(bindingId, input)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-selection-state',
+      request,
+      postgresSelectionLookupSchema
+    )
+    if (result.result) this.postgresResult(input, result.result)
+    return result
+  }
+  private postgresSelection(
+    bindingId: string,
+    input: ProductPostgresSelectionInput
+  ): { artifact: string; manifest_sha256: string; selection: ProductPostgresSelectionInput } {
+    const parsed = postgresSelectionSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const intent = this.vault.intent(bindingId)
+    return {
+      artifact: intent.artifact_path,
+      manifest_sha256: intent.manifest_sha256,
+      selection: parsed.data
+    }
+  }
+  private postgresScope(bindingId: string, scope: ProductEnvironmentScope): void {
+    if (scope.controller_id !== this.vault.resolve(bindingId).controllerId)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+  }
+  private postgresMetadata(
+    scope: ProductEnvironmentScope,
+    metadata: ProductPostgresMetadata
+  ): void {
+    if (
+      metadata.controller_id !== scope.controller_id ||
+      metadata.app_id !== scope.app_id ||
+      metadata.ownership_generation !== scope.ownership_generation
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+  }
+  private postgresResult(
+    input: ProductPostgresSelectionInput,
+    result: ProductPostgresSelectionResult
+  ): void {
+    if (
+      result.request_key !== input.request_key ||
+      result.controller_id !== input.scope.controller_id ||
+      result.app_id !== input.scope.app_id ||
+      result.ownership_generation !== input.scope.ownership_generation ||
+      result.database.database_id !== input.database_id ||
+      result.database.controller_id !== input.scope.controller_id ||
+      result.database.ownership_generation !== input.scope.ownership_generation ||
+      ![input.expected_source_generation, input.expected_source_generation + 1].includes(
+        result.source_generation
+      ) ||
+      (result.source_generation === input.expected_source_generation &&
+        result.source_config_sha256 !== input.expected_source_config_sha256)
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+  }
+  private async configurationOperation<T>(
+    bindingId: string,
+    operation:
+      | 'stage-project-environment'
+      | 'project-environment-state'
+      | 'project-environment-context'
+      | 'project-environment-review'
+      | 'select-project-environment'
+      | 'project-environment-selection-state'
+      | 'project-configuration-context'
+      | 'prepare-managed-postgres'
+      | 'managed-postgres-state'
+      | 'managed-postgres-prepare-state'
+      | 'managed-postgres-review'
+      | 'select-managed-postgres'
+      | 'managed-postgres-selection-state'
+      | 'managed-postgres-inspection'
+      | 'project-reconnection-context',
+    payload: object,
+    schema: z.ZodType<T>,
+    beforeSend?: () => void
+  ): Promise<T> {
+    const before = this.vault.resolve(bindingId),
+      intent = this.vault.intent(bindingId)
+    const authorize = (): void => {
+      const current = this.vault.resolve(bindingId),
+        scopes = this.vault.get(bindingId).client?.scopes ?? []
+      if (
+        current.revision !== before.revision ||
+        current.controllerId !== before.controllerId ||
+        current.accessToken !== before.accessToken ||
+        !scopes.includes('deploy:manual') ||
+        !scopes.includes('policy:write') ||
+        (['managed-postgres-inspection', 'project-reconnection-context'].includes(operation) &&
+          !scopes.includes('read'))
+      )
+        throw new DesktopControllerVaultError('BINDING_CHANGED')
+    }
+    authorize()
+    const result = await this.exchange(
+      intent,
+      [
+        'managed-postgres-review',
+        'select-managed-postgres',
+        'managed-postgres-inspection'
+      ].includes(operation)
+        ? { timeoutMs: 90000 }
+        : {},
+      {
+        operation,
+        payload,
+        expected_revision: before.revision,
+        beforeSend: () => {
+          authorize()
+          beforeSend?.()
+        }
+      }
+    )
+    authorize()
+    const parsed = schema.safeParse(result)
+    if (!parsed.success) throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    return parsed.data
+  }
+  async registerProject(
+    bindingId: string,
+    input: ProductProjectRegistrationInput
+  ): Promise<ProductProjectRegistrationResult> {
+    return this.projectOperation(
+      bindingId,
+      'register-project',
+      input,
+      projectRegistrationResultSchema
+    )
+  }
+  async verifyProjectSource(
+    bindingId: string,
+    input: Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>
+  ): Promise<ProductProjectSourceVerificationResult> {
+    const intent = this.vault.intent(bindingId)
+    return this.projectOperation(
+      bindingId,
+      'verify-project-source',
+      {
+        ...input,
+        artifact: intent.artifact_path,
+        manifest_sha256: intent.manifest_sha256
+      },
+      projectSourceVerificationResultSchema
+    )
+  }
+  private async projectOperation<T extends { controller_id: string }>(
+    bindingId: string,
+    operation:
+      | 'project-targets'
+      | 'register-project'
+      | 'verify-project-source'
+      | 'project-target-state'
+      | 'enroll-project-target'
+      | 'project-readiness'
+      | 'register-vps',
+    payload: object,
+    schema: z.ZodType<T>,
+    beforeSend?: () => void
+  ): Promise<T> {
+    const before = this.vault.resolve(bindingId),
+      intent = this.vault.intent(bindingId)
+    const reply = await this.exchange(
+      intent,
+      operation === 'project-readiness'
+        ? { timeoutMs: 210_000 }
+        : operation === 'verify-project-source'
+          ? { timeoutMs: 120_000 }
+          : operation === 'enroll-project-target' || operation === 'register-vps'
+            ? { timeoutMs: 90_000 }
+            : {},
+      {
+        operation,
+        payload: { ...payload, controller_id: intent.controller_id },
+        expected_revision: before.revision,
+        beforeSend
+      }
+    )
+    const after = this.vault.resolve(bindingId)
+    if (
+      before.revision !== after.revision ||
+      before.controllerId !== after.controllerId ||
+      before.accessToken !== after.accessToken
+    )
+      throw new DesktopControllerVaultError('BINDING_CHANGED')
+    const parsed = schema.safeParse(reply)
+    if (!parsed.success || parsed.data.controller_id !== intent.controller_id)
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    return parsed.data
+  }
+  async enroll(
+    bindingId: string,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<ProductDesktopControllerBindingMetadata> {
+    const timeout = options.timeoutMs ?? 45_000
+    if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 60_000)
+      throw new DesktopControllerVaultError('REQUEST_INVALID')
+    if (options.signal?.aborted) throw new DesktopControllerEnrollmentError('REQUEST_ABORTED')
+    let before = this.vault.get(bindingId)
+    if (before.state === 'active') {
+      this.vault.resolve(bindingId)
+      return before
+    }
+    if (before.state === 'disabled') throw new DesktopControllerVaultError('BINDING_CHANGED')
+    const intent = this.vault.intent(bindingId)
+    try {
+      const raw = await this.exchange(intent, options)
+      const issued = desktopEnrollmentResponseSchema.safeParse(raw),
+        replay = replaySchema.safeParse(raw)
+      if (
+        (!issued.success && !replay.success) ||
+        (issued.success ? issued.data.controller_id : replay.data!.controller_id) !==
+          intent.controller_id
+      )
+        throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+      // A concurrent enrollment or local disable may have completed while SSH was in flight.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        before = this.vault.get(bindingId)
+        if (before.state === 'active') {
+          this.vault.resolve(bindingId)
+          return before
+        }
+        if (before.state === 'disabled') throw new DesktopControllerVaultError('BINDING_CHANGED')
+        this.vault.intent(bindingId) // Fresh current VPS/profile check before persisting credential.
+        try {
+          return issued.success
+            ? this.vault.activate(bindingId, before.revision, issued.data)
+            : this.vault.deliveryUnknown(bindingId, before.revision, replay.data!.client_id)
+        } catch (error) {
+          if (
+            !(error instanceof DesktopControllerVaultError) ||
+            error.code !== 'BINDING_CHANGED' ||
+            attempt === 1
+          )
+            throw error
+        }
+      }
+      throw new DesktopControllerVaultError('BINDING_CHANGED')
+    } catch (error) {
+      const current = this.vault.get(bindingId)
+      if (current.state === 'pending') this.vault.deliveryUnknown(bindingId, current.revision)
+      if (
+        error instanceof DesktopControllerEnrollmentError ||
+        error instanceof DesktopControllerVaultError
+      )
+        throw error
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    }
+  }
+  private async exchange(
+    intent: ProductDesktopControllerBindingIntent,
+    options: { signal?: AbortSignal; timeoutMs?: number },
+    command?: {
+      operation:
+        | 'revoke-desktop-client'
+        | 'project-targets'
+        | 'register-project'
+        | 'verify-project-source'
+        | 'project-target-state'
+        | 'enroll-project-target'
+        | 'project-readiness'
+        | 'register-vps'
+        | 'stage-project-environment'
+        | 'project-environment-state'
+        | 'project-environment-context'
+        | 'project-environment-review'
+        | 'select-project-environment'
+        | 'project-environment-selection-state'
+        | 'project-configuration-context'
+        | 'prepare-managed-postgres'
+        | 'managed-postgres-state'
+        | 'managed-postgres-prepare-state'
+        | 'managed-postgres-review'
+        | 'select-managed-postgres'
+        | 'managed-postgres-selection-state'
+        | 'managed-postgres-inspection'
+        | 'project-reconnection-context'
+      payload: object
+      expected_revision?: number
+      beforeSend?: () => void
+    }
+  ): Promise<unknown> {
+    const timeout = options.timeoutMs ?? 45_000
+    if (
+      !Number.isSafeInteger(timeout) ||
+      timeout < 1 ||
+      timeout >
+        (command?.operation === 'project-readiness'
+          ? 210_000
+          : command?.operation === 'verify-project-source'
+            ? 120_000
+            : command?.operation === 'enroll-project-target' ||
+                command?.operation === 'register-vps' ||
+                command?.operation === 'managed-postgres-review' ||
+                command?.operation === 'select-managed-postgres' ||
+                command?.operation === 'managed-postgres-inspection'
+              ? 90_000
+              : 60_000)
+    )
+      throw new DesktopControllerVaultError('REQUEST_INVALID')
+    if (options.signal?.aborted) throw new DesktopControllerEnrollmentError('REQUEST_ABORTED')
+    const stop = new AbortController()
+    let channel: ClientChannel | undefined,
+      expired = false
+    const abort = (): void => stop.abort()
+    const timer = setTimeout(() => {
+      expired = true
+      stop.abort()
+    }, timeout)
+    options.signal?.addEventListener('abort', abort, { once: true })
+    let rejectStopped!: () => void
+    const stopped = new Promise<never>((_resolve, reject) => {
+      rejectStopped = () => {
+        channel?.destroy()
+        reject(
+          new DesktopControllerEnrollmentError(expired ? 'REQUEST_TIMEOUT' : 'REQUEST_ABORTED')
+        )
+      }
+      stop.signal.addEventListener('abort', rejectStopped, { once: true })
+    })
+    const work = async (): Promise<unknown> => {
+      if (intent.installation) {
+        const reference = intent.upgrade ?? intent.installation
+        const revision = this.vault.get(intent.binding_id).revision
+        const assertCurrent = (): void => {
+          if (
+            canonicalH2Json(this.vault.intent(intent.binding_id)) !== canonicalH2Json(intent) ||
+            this.vault.get(intent.binding_id).state === 'disabled' ||
+            this.vault.get(intent.binding_id).revision !== revision ||
+            (command?.expected_revision !== undefined && revision !== command.expected_revision)
+          )
+            throw new DesktopControllerVaultError('BINDING_CHANGED')
+        }
+        const response = await administerInstalledController({
+          ...(intent.upgrade ? { purpose: 'upgrade' as const } : {}),
+          ssh: this.ssh,
+          vpsId: intent.vps_id,
+          expectedIdentity: intent.principal,
+          locator: {
+            request_key: reference.request_key,
+            release_sha256: reference.release_sha256,
+            installer_sha256: reference.installer_sha256
+          },
+          assertCurrent,
+          beforeDispatch: command?.beforeSend,
+          signal: stop.signal,
+          bootstrapScript: this.installedOptions.bootstrapScript,
+          request: {
+            format: 1,
+            operation: 'admin',
+            authority: {
+              request_key: reference.request_key,
+              release_sha256: reference.release_sha256,
+              installer_sha256: reference.installer_sha256,
+              controller_id: intent.controller_id,
+              runtime_uid: intent.installation.runtime_uid,
+              payload_sha256: intent.manifest_sha256,
+              ...(intent.upgrade
+                ? {
+                    revision: {
+                      installation_request_key: intent.installation.request_key,
+                      parent_upgrade_key: intent.upgrade.parent_upgrade_key,
+                      parent_release_sha256: intent.upgrade.parent_release_sha256
+                    }
+                  }
+                : {})
+            },
+            command: {
+              operation: command?.operation ?? 'enroll-desktop-client',
+              payload: command?.payload ?? {
+                request_key: intent.binding_id,
+                display_name: intent.display_name,
+                requested_scopes: intent.requested_scopes
+              }
+            }
+          }
+        })
+        assertCurrent()
+        return decodeAdminEnvelope(response)
+      }
+      const opened = await this.ssh.openProductBootstrapChannel(intent.vps_id, pinnedScript, {
+        signal: stop.signal,
+        expectedIdentity: intent.principal,
+        timeoutMs: Math.min(timeout, 30_000)
+      })
+      channel = opened.channel
+      channel.on('error', ignoreError)
+      channel.stderr.on('data', discardStderr)
+      if (stop.signal.aborted) {
+        channel.destroy()
+        throw new DesktopControllerEnrollmentError('REQUEST_ABORTED')
+      }
+      if (!samePrincipal(intent.principal, opened.identity))
+        throw new DesktopControllerEnrollmentError('CONTROLLER_IDENTITY_MISMATCH')
+      const current = this.vault.intent(intent.binding_id)
+      if (
+        !samePrincipal(current.principal, intent.principal) ||
+        this.vault.get(intent.binding_id).state === 'disabled' ||
+        (command?.expected_revision !== undefined &&
+          this.vault.get(intent.binding_id).revision !== command.expected_revision)
+      )
+        throw new DesktopControllerVaultError('BINDING_CHANGED')
+      command?.beforeSend?.()
+      const body = JSON.stringify({
+        operation: command?.operation ?? 'enroll-desktop-client',
+        artifact_path: intent.artifact_path,
+        data_directory: intent.data_directory,
+        node_path: intent.node_path,
+        manifest_sha256: intent.manifest_sha256,
+        controller_id: intent.controller_id,
+        payload: command?.payload ?? {
+          request_key: intent.binding_id,
+          display_name: intent.display_name,
+          requested_scopes: intent.requested_scopes
+        }
+      })
+      if (
+        Buffer.byteLength(body) >
+        (['register-vps', 'stage-project-environment'].includes(command?.operation ?? '')
+          ? 512 * 1024
+          : 16384)
+      )
+        throw new DesktopControllerVaultError('REQUEST_INVALID')
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = []
+        let size = 0,
+          settled = false,
+          ended = false
+        const fail = (): void => {
+          if (!settled) {
+            settled = true
+            reject(new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED'))
+          }
+          channel?.destroy()
+        }
+        channel!.on('data', (chunk: Buffer) => {
+          size += chunk.length
+          if (size > 65536) fail()
+          else chunks.push(chunk)
+        })
+        channel!.once('error', fail)
+        channel!.once('end', () => {
+          ended = true
+        })
+        channel!.once('close', (exitCode: number | undefined) => {
+          if (settled) return
+          try {
+            if (!ended || exitCode !== 0) throw new Error()
+            const decoded: unknown = JSON.parse(
+              new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, size))
+            )
+            const response = decodeAdminEnvelope(decoded)
+            settled = true
+            resolve(response)
+          } catch (error) {
+            if (error instanceof DesktopControllerEnrollmentError) {
+              settled = true
+              reject(error)
+            } else fail()
+          }
+        })
+        channel!.end(body)
+      })
+    }
+    try {
+      return await Promise.race([work(), stopped])
+    } finally {
+      clearTimeout(timer)
+      options.signal?.removeEventListener('abort', abort)
+      stop.signal.removeEventListener('abort', rejectStopped)
+      channel?.destroy()
+    }
+  }
+}
+function ignoreError(): void {
+  /* Raw SSH errors never leave main. */
+}
+function discardStderr(): void {
+  /* Do not buffer/log arbitrary remote stderr. */
+}
+
+function decodeAdminEnvelope(value: unknown): unknown {
+  const failure = z
+    .strictObject({
+      ok: z.literal(false),
+      code: z.enum([
+        ...postgresAdminErrorCodes,
+        ...postgresInspectionErrorCodes,
+        'PRODUCT_ENVIRONMENT_INPUT_INVALID',
+        'PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED',
+        'PRODUCT_ENVIRONMENT_SOURCE_CHANGED',
+        'PRODUCT_ENVIRONMENT_REVISION_CONFLICT',
+        'PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT',
+        'PRODUCT_ENVIRONMENT_UNAVAILABLE',
+        'PRODUCT_ENVIRONMENT_STORAGE_UNAVAILABLE',
+        'PRODUCT_ENVIRONMENT_HELPER_UPGRADE_REQUIRED',
+        'PRODUCT_ENVIRONMENT_REQUIRES_QUIESCENCE',
+        'CONTROLLER_SECRET_KEY_UNAVAILABLE',
+        'CONTROLLER_ADMIN_FAILED',
+        'CONTROLLER_IDENTITY_MISMATCH',
+        'CONTROLLER_BUNDLE_VERIFICATION_FAILED',
+        'CONTROLLER_NODE_UNSUPPORTED',
+        'PROJECT_SOURCE_REQUEST_INVALID',
+        'PROJECT_SOURCE_AUTHORITY_REJECTED',
+        'PROJECT_SOURCE_CHANGED',
+        'PROJECT_SOURCE_OBSERVATION_STALE',
+        'PROJECT_SOURCE_REQUIRES_QUIESCENCE',
+        'PROJECT_SOURCE_UNSUPPORTED',
+        'PROJECT_SOURCE_LIMIT_EXCEEDED',
+        'PROJECT_SOURCE_FETCH_FAILED',
+        'PROJECT_SOURCE_ABORTED',
+        'PROJECT_SOURCE_DEADLINE',
+        'PROJECT_SOURCE_STORAGE_UNAVAILABLE',
+        'VPS_REGISTRATION_REQUEST_INVALID',
+        'VPS_REGISTRATION_CONFLICT',
+        'VPS_REGISTRATION_CHANGED',
+        'VPS_REGISTRATION_UNAVAILABLE',
+        'CONTROLLER_VPS_INPUT_INVALID',
+        'CONTROLLER_VPS_CONTROLLER_MISMATCH',
+        'CONTROLLER_VPS_ENROLLMENT_ABORTED',
+        'CONTROLLER_VPS_ENROLLMENT_CONFLICT',
+        'CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE',
+        'CONTROLLER_VPS_SSH_VERIFICATION_FAILED',
+        'CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE',
+        'CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE',
+        'PROJECT_READINESS_REQUEST_INVALID',
+        'PROJECT_READINESS_UNAVAILABLE',
+        'PROJECT_TARGET_REQUEST_INVALID',
+        'PROJECT_TARGET_AUTHORITY_CHANGED',
+        'PROJECT_TARGET_CONFLICT',
+        'PROJECT_TARGET_UNAVAILABLE',
+        'TARGET_ENROLLMENT_INPUT_INVALID',
+        'TARGET_ENROLLMENT_AUTHORITY_REJECTED',
+        'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE',
+        'TARGET_ENROLLMENT_CONFLICT',
+        'TARGET_ENROLLMENT_NOT_READY',
+        'TARGET_ENROLLMENT_TRANSACTION_ACTIVE',
+        'PROJECT_RECONNECTION_INPUT_INVALID',
+        'PROJECT_RECONNECTION_AUTHORITY_CHANGED',
+        'PROJECT_RECONNECTION_UNAVAILABLE'
+      ])
+    })
+    .safeParse(value)
+  if (failure.success) {
+    throw new DesktopControllerEnrollmentError(failure.data.code)
+  }
+  const envelope = z.strictObject({ ok: z.literal(true), data: z.unknown() }).safeParse(value)
+  if (!envelope.success) throw new Error()
+  return envelope.data.data
+}

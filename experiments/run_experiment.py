@@ -1,4 +1,4 @@
-"""Orchestrator thí nghiệm OpsPilot TK-S6 (docs/tasks/tk-s6-load-gen-experiment-harness.md:843).
+"""Orchestrator thí nghiệm OpsPilot (docs/07-giao-thuc-thi-nghiem.md).
 
 Thực hiện quy trình 10 bước chuẩn hoá của TK-S6:
   1. Khởi tạo bản ghi Attempt trong SQLite TRƯỚC mọi bước SSH/deploy (run_id, status='running', deployment_id=None).
@@ -30,6 +30,7 @@ import sys
 import tempfile
 import time
 import types
+import urllib.parse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -94,6 +95,7 @@ from experiments.adapters.poller_adapter import (
     PollerHandle,
 )
 from experiments.faults.scheduler import apply_plan, plan_fault, reset_fault
+from experiments.load_gen.loadgen import _is_private_or_loopback
 from experiments.protocol import (
     INTERVAL_S,
     PHASE_A_S,
@@ -393,6 +395,11 @@ class SystemSshClient:
                 stderr = res.stderr
             if res.returncode != 0:
                 self.last_error_code = _classify_ssh_error(stderr)
+                lower_err = stderr.lower()
+                if res.returncode == 1 and (
+                    "no such container" in lower_err or "no such object" in lower_err
+                ):
+                    return res.returncode, stdout, "No such container"
                 return res.returncode, stdout, self.last_error_code
             return res.returncode, stdout, stderr
         except subprocess.TimeoutExpired:
@@ -742,6 +749,28 @@ def wait_with_checks(
             )
 
 
+def _resolve_loadgen_app_url(
+    app_url: str,
+    app_name: str | None,
+    ssh_client: Any | None,
+    loadgen_app_url: str | None = None,
+) -> str:
+    """Chọn URL nội bộ docker (http://app:3000) khi loadgen chạy container trên VPS public."""
+    if loadgen_app_url:
+        return loadgen_app_url
+    parsed = urllib.parse.urlparse(app_url)
+    host = parsed.hostname or ""
+    if (
+        ssh_client is not None
+        and app_name
+        and host
+        and host not in {"localhost", "127.0.0.1", "::1", "app"}
+        and not _is_private_or_loopback(host)
+    ):
+        return "http://app:3000"
+    return app_url
+
+
 def run_attempt(
     scenario: str,
     repeat_index: int,
@@ -767,6 +796,7 @@ def run_attempt(
     allow_pilot_4500: bool = False,
     ssh_secret: str | None = None,
     loadgen_counter_mount_dir: str | None = None,
+    loadgen_app_url: str | None = None,
     custom_poller_cmd: Sequence[str] | None = None,
     custom_deploy_cmd: Sequence[str] | None = None,
     raise_on_abort: bool = False,
@@ -1013,12 +1043,20 @@ def run_attempt(
             db_path=db_file,
             ml_url=ml_url,
             ssh_secret=resolved_ssh_secret,
+            startup_timeout_s=30.0,
             cli_cmd=custom_poller_cmd,
         )
 
         lg_adapter = loadgen_adapter or LoadgenAdapter()
-        loadgen_handle = lg_adapter.start(
+        effective_loadgen_url = _resolve_loadgen_app_url(
             app_url=app_url,
+            app_name=app_name,
+            ssh_client=ssh_client,
+            loadgen_app_url=loadgen_app_url,
+        )
+        loadgen_started_at = clock_fn()
+        loadgen_handle = lg_adapter.start(
+            app_url=effective_loadgen_url,
             rate_rps=5.0,
             duration_s=4500.0,
             allow_pilot_4500=allow_pilot_4500,
@@ -1167,22 +1205,43 @@ def run_attempt(
             raise ExperimentError(f"Không thể reset fault ở đầu Pha D: {reset_err}")
 
         phase_d_dur = PHASE_D_S * time_scale
-        wait_with_checks(
-            phase_d_dur,
-            check_interval_s=check_interval_s,
-            loadgen_handle=loadgen_handle,
-            poller_handle=poller_handle,
-            sleeper_fn=sleeper_fn,
-            clock_fn=clock_fn,
+        # Loadgen có trần 4500s nên có thể hết hạn vài giây trước cuối Pha D do trễ train/SSH;
+        # dừng chủ động trước hạn vài giây để không bị assert_running() báo sai là crash.
+        loadgen_stop_margin_s = 5.0 if time_scale >= 1.0 else 0.0
+        loadgen_budget_end = (
+            loadgen_started_at
+            + (loadgen_handle.effective_duration_s * time_scale)
+            - loadgen_stop_margin_s
         )
+        phase_d_with_loadgen = min(phase_d_dur, max(0.0, loadgen_budget_end - clock_fn()))
+        if phase_d_with_loadgen > 0:
+            wait_with_checks(
+                phase_d_with_loadgen,
+                check_interval_s=check_interval_s,
+                loadgen_handle=loadgen_handle,
+                poller_handle=poller_handle,
+                sleeper_fn=sleeper_fn,
+                clock_fn=clock_fn,
+            )
 
-        # Dừng Load Generator ở cuối Pha D
+        # Dừng Load Generator ở cuối Pha D (hoặc ngay trước khi vượt trần 4500s)
         try:
             loadgen_handle.stop()
         except Exception as e:
             reason = f"loadgen_stop_failed: {e}"
             abort_run(conn, run_id, reason=reason, auto_commit=True)
             raise ExperimentError(f"Dừng load generator thất bại: {e}") from e
+
+        remaining_phase_d = max(0.0, phase_d_dur - phase_d_with_loadgen)
+        if remaining_phase_d > 0:
+            wait_with_checks(
+                remaining_phase_d,
+                check_interval_s=check_interval_s,
+                loadgen_handle=None,
+                poller_handle=poller_handle,
+                sleeper_fn=sleeper_fn,
+                clock_fn=clock_fn,
+            )
 
         # =========================================================================
         # BƯỚC 9: Draining dữ liệu & Cổng kiểm tra toàn vẹn (Integrity Gate)
@@ -1454,7 +1513,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--report-path",
-        default=str(Path(__file__).resolve().parents[1] / "docs/evidence/tk-s7-ml-ready-2/preflight-report.json"),
+        default=str(Path(__file__).resolve().parents[1] / "experiments/results/preflight-report.json"),
         help="Đường dẫn report preflight đã khử nhạy cảm",
     )
     parser.add_argument(

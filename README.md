@@ -1,101 +1,149 @@
-# OpsPilot — Desktop app deploy/migrate web app lên VPS + ML phát hiện degraded state
+# OpsPilot
 
-Dự án CNTT · 2 người · hạn nộp **20/11/2026**
+**OpsPilot** is a cross-platform desktop application for deploying, migrating, and monitoring web applications on Linux VPS instances over SSH, integrated with an unsupervised Machine Learning anomaly detection engine to detect degraded operational states and trigger automatic rollback before complete service failure.
 
-Ứng dụng desktop kết nối VPS qua SSH để deploy/migrate web app đa framework, đồng thời
-thu thập metric vận hành và chạy song song 4 phương pháp phát hiện bất thường
-(rule-based, Z-score/EWMA, Isolation Forest, One-Class SVM + ensemble) để phát hiện suy
-giảm vận hành và tự động rollback trước khi ứng dụng chết hẳn.
-
-**Không cài agent thường trực trên VPS** — chỉ có Docker và các container của chính ứng dụng.
+> **Information Technology Project (504070)** — Faculty of Information Technology, Ton Duc Thang University  
+> **Authors:** Nguyen Van Son (`521H0148`) · Vo Thi Thien Kim (`521H0092`)  
+> **Advisor:** M.Sc. Doan Xuan Thanh
 
 ---
 
-## Trạng thái
+## Key Capabilities
 
-| Giai đoạn | Trạng thái |
-|---|---|
-| Tài liệu & hợp đồng kỹ thuật | ✅ Xong (tuần 0) |
-| Demo lát cắt VPS Management + Express/PostgreSQL Deploy | ✅ Đã demo cơ bản 30/08 |
-| Code | 🏗️ W3: collector → poller/rule/ML → Dashboard — xem [`docs/tasks/`](docs/tasks/) |
-
-> **Rebaseline 09/08/2026:** nhóm bắt đầu triển khai vào **10/08/2026**. Bốn tuần đầu ưu tiên
-> lát cắt chạy thật từ SSH → deploy → metric → ML/dashboard, mục tiêu nghiệm thu **16/24 yêu
-> cầu chức năng (66,7%)** vào 11/09. Lịch mới: [`docs/04-timeline.md`](docs/04-timeline.md).
->
-> **Điểm vào sau demo:** [`docs/23-ke-hoach-sau-demo-30-08.md`](docs/23-ke-hoach-sau-demo-30-08.md)
-> ghi task hiện tại của A/B, thứ tự kéo và điểm tích hợp. AI mới đọc file này trước board.
+- **SSH-First VPS Management:** Connect to Ubuntu/Linux VPS nodes with TOFU host-key verification, OS-backed encrypted credential storage (Electron `safeStorage`), environment diagnostics, and remote Docker/Nginx readiness checks. No permanent agent is required on target VPS nodes in Desktop mode.
+- **Multi-Framework Container Deployment:** Automated framework detection and template generation (`Dockerfile` + `docker-compose.yml`) supporting **Express.js + PostgreSQL**, **Next.js**, and **Vite SPA** from either local folders or Git repositories, with zero-downtime health checks and automatic rollback on failure.
+- **Cross-VPS Migration:** End-to-end application and PostgreSQL database migration (`pg_dump` / `pg_restore` + schema/row-count verification + source backup/restore protection) across independent VPS nodes.
+- **Runtime Telemetry & Multi-Method Anomaly Detection:** Lightweight sidecar collector capturing 11 operational metrics every 10 seconds, evaluated in real time by a local Python ML service running four parallel detection methods:
+  - Rule-based thresholds
+  - Statistical Z-score / EWMA
+  - Isolation Forest (`scikit-learn`)
+  - One-Class SVM (`scikit-learn`)
+  - Weighted Ensemble decision engine with hysteresis and automated rollback trigger
+- **Automated Verification & Evaluation Suite:** Reproducible fault-injection harness (`memory_leak`, `cpu_saturation`, `latency_creep`, `error_rate_spike`, `slow_db`) validated across 50 formal experimental runs (10 repetitions × 5 scenarios).
 
 ---
 
-## Bắt đầu từ đâu
+## Architecture Overview
 
-**Người mới vào dự án / AI mới vào phiên làm việc — đọc theo thứ tự:**
-
-1. [`CLAUDE.md`](CLAUDE.md) — quy tắc bất biến + các con số đã chốt. **Bắt buộc.**
-2. [`docs/README.md`](docs/README.md) — bản đồ toàn bộ tài liệu.
-3. [`docs/01-ke-hoach.md`](docs/01-ke-hoach.md) — kiến trúc + spec 10 module.
-4. [`docs/contracts/`](docs/contracts/) — hợp đồng kỹ thuật, không được sửa tuỳ tiện.
-5. [`docs/tasks/`](docs/tasks/) — chọn một task trên board, đọc hồ sơ `tk-*`, tạo branch, bàn giao PR và cập nhật trạng thái.
-
-**Sắp code một module cụ thể:** mở `docs/prompts/mXX-*.md` tương ứng, dán vào AI cùng với
-`CLAUDE.md`. Đó là toàn bộ ngữ cảnh cần thiết.
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          OpsPilot Desktop App                           │
+│                                                                         │
+│  ┌──────────────────────┐       Typed IPC       ┌────────────────────┐  │
+│  │  Renderer (React 19, │ ◄───────────────────► │  Main Process      │  │
+│  │  Ant Design, Zustand,│                       │  (Node 22, SSH2,   │  │
+│  │  Recharts, xterm.js) │                       │   SQLite + Vault)  │  │
+│  └──────────────────────┘                       └───────┬──────┬─────┘  │
+│                                                         │      │        │
+│                                            REST 127.0.0.1      │ SSH    │
+│                                                         ▼      │        │
+│                                            ┌────────────────┐  │        │
+│                                            │  ML Service    │  │        │
+│                                            │  (FastAPI +    │  │        │
+│                                            │  scikit-learn) │  │        │
+│                                            └────────────────┘  │        │
+└────────────────────────────────────────────────────────────────┼────────┘
+                                                                 │
+                                                                 ▼
+                                            ┌─────────────────────────────┐
+                                            │   Target VPS (Ubuntu 24.04) │
+                                            │   Docker · App · PostgreSQL │
+                                            │   Metrics Collector Sidecar │
+                                            └─────────────────────────────┘
+```
 
 ---
 
-## Yêu cầu môi trường
+## Formal Evaluation Summary (50-Run Benchmark)
 
-| Thành phần | Phiên bản | Ghi chú |
+Evaluated on live Ubuntu 24.04 VPS nodes under controlled load (`5 req/s`) across 5 fault scenarios (10 runs per scenario, 60-second grace window):
+
+| Detector | Precision | Recall | F1-Score | Median Detection Delay |
+|---|---:|---:|---:|---:|
+| Rule-Based | 0.900 | 0.900 | 0.900 | 185.0 s |
+| Z-Score / EWMA | 0.783 | 0.940 | 0.855 | 25.0 s |
+| Isolation Forest | 0.904 | 0.940 | 0.922 | 35.0 s |
+| One-Class SVM | 0.904 | 0.940 | 0.922 | 25.0 s |
+| **Ensemble** | **0.941** | **0.960** | **0.950** | **25.0 s** |
+
+Raw CSV outputs and reproducible analysis scripts are located in [`experiments/results/formal-50/`](experiments/results/formal-50/).
+
+---
+
+## Repository Structure
+
+```text
+app/            Electron desktop application (main: SSH, deploy, migrate, monitor, SQLite; renderer: React UI)
+ml-service/     Local FastAPI + scikit-learn anomaly detection service (loopback 127.0.0.1:8765)
+collector/      Lightweight Python metrics collector container writing metrics.jsonl on VPS
+templates/      Docker and docker-compose templates per detected web framework
+experiments/    Fault injectors, load generator, 50-run experiment runner, and statistical analysis scripts
+demo-apps/      Sample applications (Express + PostgreSQL, Vite SPA, Next.js) for integration testing
+docs/           Technical contracts (SQLite schema, OpenAPI, IPC types), architecture decisions, and protocols
+tools/          Local developer environment helper scripts
+```
+
+---
+
+## Environment Requirements
+
+| Component | Version | Notes |
 |---|---|---|
-| Node.js | 22 LTS | có `.nvmrc` |
-| pnpm | 9+ | `corepack enable` |
-| Python | 3.12 | cho `ml-service/`, `experiments/` |
-| Docker Desktop | mới nhất | chỉ để test collector local, không bắt buộc |
-| VPS | 2 × Ubuntu 24.04 LTS, 2vCPU/4GB/40GB | cùng provider, cùng region |
-
-Hướng dẫn chi tiết + bẫy trên Windows: [`docs/09-moi-truong-dev.md`](docs/09-moi-truong-dev.md)
-Dựng VPS: [`docs/08-vps-setup.md`](docs/08-vps-setup.md)
+| Node.js | 22 LTS | See `.nvmrc`; on Windows with multiple Node versions, run `. .\tools\enter-node22.ps1` |
+| pnpm | 11+ | Configured via `packageManager` (`corepack enable`) |
+| Python | 3.12 | Required for local `ml-service/` and `experiments/` development (bundled automatically in the Windows `.exe` installer) |
+| Docker | Latest | Required on target VPS instances (Ubuntu 24.04 LTS recommended) |
 
 ---
 
-## Cấu trúc repo
+## Getting Started
 
+### 1. Install Dependencies
+
+```bash
+# Node.js / Electron workspace
+pnpm install --frozen-lockfile
+
+# Python ML service virtual environment
+cd ml-service
+python -m venv .venv
+# Windows: .venv\Scripts\activate  |  Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
 ```
-app/            Electron (main: SSH, deploy, migrate, poller, SQLite | renderer: React + AntD)
-ml-service/     FastAPI + scikit-learn, chạy localhost:8765, do Electron spawn
-collector/      Script Python chạy trong container trên VPS, ghi metrics.jsonl
-templates/      Dockerfile + docker-compose template cho từng framework
-experiments/    Fault injection, load generator, chạy thí nghiệm, phân tích P/R/F1
-demo-apps/      3 app mẫu Tier 1 để test và demo
-docs/           Toàn bộ tài liệu, hợp đồng kỹ thuật, prompt cho AI
-```
 
----
+### 2. Common Commands
 
-## Lệnh thường dùng (sẽ có từ tuần 1)
-
-Trên máy có nhiều bản Node, chạy một lần ở đầu terminal PowerShell:
+On Windows with multiple Node installations, select Node 22 first:
 
 ```powershell
 . .\tools\enter-node22.ps1
 ```
 
+Then run from the repository root:
+
 ```bash
-pnpm dev          # chạy Electron ở chế độ dev (tự spawn ml-service)
-pnpm typecheck    # kiểm tra TypeScript
-pnpm lint         # ESLint + Ruff
-pnpm test         # Vitest + Pytest
-pnpm build        # build mã nguồn Electron
-pnpm build:win    # tạo bộ cài Windows bằng electron-builder
+pnpm dev          # Start Electron app in development mode (spawns local ML service)
+pnpm typecheck    # Type-check Electron main, preload, and renderer TypeScript
+pnpm lint         # Run ESLint (app) and Ruff (ml-service)
+pnpm test         # Run Vitest unit/integration suite and Pytest ML test suite
+pnpm build        # Compile Electron main, preload, and renderer bundles
+pnpm build:win    # Build portable Windows NSIS installer via electron-builder
+```
+
+### 3. Python Test Suites (Collector & Experiments)
+
+```bash
+python -m pytest ml-service/tests collector/tests experiments/tests -q
+python -m ruff check ml-service collector experiments
 ```
 
 ---
 
-## Tài liệu quan trọng nhất
+## Technical Documentation
 
-- Kế hoạch & spec module → [`docs/01-ke-hoach.md`](docs/01-ke-hoach.md)
-- Lịch 16 tuần theo ngày thật → [`docs/04-timeline.md`](docs/04-timeline.md)
-- Bảng task & trạng thái trong repo → branch → PR → Done → [`docs/tasks/`](docs/tasks/)
-- Hồ sơ một file gửi engineer/giảng viên review kiến trúc → [`docs/19-ho-so-review-va-chot-kien-truc.md`](docs/19-ho-so-review-va-chot-kien-truc.md)
-- Giao thức thí nghiệm (phần ăn điểm) → [`docs/07-giao-thuc-thi-nghiem.md`](docs/07-giao-thuc-thi-nghiem.md)
-- Nhật ký quyết định → [`DECISIONS.md`](DECISIONS.md)
+- **Documentation Index:** [`docs/README.md`](docs/README.md)
+- **Technical Contracts (SQLite schema, IPC, OpenAPI, metric format):** [`docs/contracts/`](docs/contracts/)
+- **Architecture Decision Records (ADRs):** [`docs/14-quyet-dinh-kien-truc.md`](docs/14-quyet-dinh-kien-truc.md)
+- **Experimental Evaluation Protocol:** [`docs/07-giao-thuc-thi-nghiem.md`](docs/07-giao-thuc-thi-nghiem.md)
+- **Development Environment Guide:** [`docs/09-moi-truong-dev.md`](docs/09-moi-truong-dev.md)
+- **Target VPS Setup Runbook:** [`docs/08-vps-setup.md`](docs/08-vps-setup.md)

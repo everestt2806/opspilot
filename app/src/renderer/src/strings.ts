@@ -124,7 +124,7 @@ const BASE_EN_STRINGS = {
     delete: {
       title: 'Remove VPS from OpsPilot?',
       description: (name: string) =>
-        `VPS "${name}" will be hidden from OpsPilot. Apps on the server and their local deployment history are kept. Add the same host, SSH port and verified fingerprint again to restore them.`,
+        `VPS "${name}" will be hidden from OpsPilot. Apps on the server and their local deployment history are kept. Add the same server again to restore them.`,
       confirm: 'Remove VPS'
     },
     fields: {
@@ -147,8 +147,9 @@ const BASE_EN_STRINGS = {
       createTitle: 'Add VPS',
       editTitle: 'Edit VPS',
       hostPlaceholder: '203.0.113.10',
+      advanced: 'Advanced settings',
       hostFingerprintHint:
-        'Enter the SHA256 fingerprint copied independently from the VPS console. The same host, SSH port and fingerprint restore a previously removed VPS and its apps.',
+        'Optional. OpsPilot remembers the server key on first connection and checks it on later connections. Enter a known fingerprint here to verify it in advance.',
       keepCredentialHint: 'Leave blank to keep the current credential.'
     },
     validation: {
@@ -1084,7 +1085,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     delete: {
       title: 'Gỡ VPS khỏi OpsPilot?',
       description: (name: string) =>
-        `VPS "${name}" sẽ ẩn khỏi OpsPilot. App trên máy chủ và lịch sử triển khai trong máy này vẫn được giữ. Thêm lại đúng host, cổng SSH và fingerprint đã xác minh để khôi phục.`,
+        `VPS "${name}" sẽ ẩn khỏi OpsPilot. App trên máy chủ và lịch sử triển khai trong máy này vẫn được giữ. Thêm lại cùng máy chủ để khôi phục.`,
       confirm: 'Gỡ VPS'
     },
     fields: {
@@ -1093,8 +1094,9 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     form: {
       ...BASE_EN_STRINGS.vps.form,
+      advanced: 'Cài đặt nâng cao',
       hostFingerprintHint:
-        'Nhập fingerprint SHA256 đã lấy độc lập từ console VPS. Cùng host, cổng SSH và fingerprint sẽ khôi phục VPS đã gỡ cùng các app.'
+        'Không bắt buộc. OpsPilot ghi nhớ khóa máy chủ ở lần kết nối đầu tiên và kiểm tra ở các lần sau. Nếu đã có fingerprint tin cậy, bạn có thể nhập để đối chiếu trước.'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -1894,8 +1896,9 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     form: {
       ...BASE_EN_STRINGS.vps.form,
+      advanced: '高级设置',
       hostFingerprintHint:
-        '填写从 VPS 控制台独立获取的 SHA256 指纹。使用相同主机、SSH 端口和指纹可恢复已移除的 VPS 及应用。'
+        '可选。OpsPilot 在首次连接时记住服务器密钥，并在后续连接时核对。也可在此填写已知指纹以提前验证。'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -2669,8 +2672,9 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     form: {
       ...BASE_EN_STRINGS.vps.form,
+      advanced: '詳細設定',
       hostFingerprintHint:
-        'VPS コンソールから別途取得した SHA256 フィンガープリントを入力します。同じホスト、SSH ポート、フィンガープリントで再登録すると VPS とアプリを復元できます。'
+        '省略できます。初回接続時にサーバー鍵を記憶し、以後の接続時に確認します。既知のフィンガープリントを入力して事前に照合することもできます。'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,

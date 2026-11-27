@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
+const nonce = randomBytes(6).toString('hex')
+const directory = resolve(import.meta.dirname, '../../.out-scripts/public-git-systemd', nonce)
+mkdirSync(directory, { recursive: true })
+const output = join(directory, 'service.json')
+console.log(JSON.stringify({ status: 'RUNNING', nonce, progress: output }))
+const child = spawn(
+  process.execPath,
+  [
+    '--import',
+    join(import.meta.dirname, 'public-git-systemd-preload.mjs'),
+    join(import.meta.dirname, 'run.mjs'),
+    '--public-git-checkpoint-gate'
+  ],
+  {
+    env: {
+      ...process.env,
+      OPSPILOT_PUBLIC_SERVICE_RESULT: output,
+      OPSPILOT_TARGET_ENROLL_RUNTIME_RESULT: join(directory, 'enrollment.json')
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  }
+)
+let text = '',
+  overflow = false
+child.stdout.on('data', (bytes) => {
+  if (text.length + bytes.length <= 512 * 1024) text += bytes
+  else overflow = true
+})
+child.stderr.on('data', () => {})
+const code = await new Promise((resolveChild) => {
+  child.once('error', () => resolveChild(null))
+  child.once('close', resolveChild)
+})
+let result
+try {
+  assert.equal(code, 1)
+  assert.equal(overflow, false)
+  const runtime = text
+    .split('\n')
+    .filter((line) => line.startsWith('{'))
+    .map((line) => JSON.parse(line))
+    .find((value) => value.scope === 'PINNED_SSH_SQLITE_DOCKER_RUNTIME')
+  assert.equal(runtime.failure?.code, 'PUBLIC_SYSTEMD_LAB_FINISHED')
+  assert.equal(runtime.cleanup, true)
+  assert.equal(runtime.subject_unchanged, true)
+  assert.notEqual(runtime.deadline_expired, true)
+  const service = JSON.parse(readFileSync(output, 'utf8'))
+  assert.equal(service.status, 'PASS')
+  assert.equal(service.cleanup, true)
+  if (process.env.OPSPILOT_MANUAL_HTTP === '1') {
+    assert.equal(service.manual_http, true)
+    assert.equal(service.manual_same_sha_runtime, true)
+    assert.equal(service.manual_duplicate_one_job, true)
+    assert.equal(service.discarded_response_lookup, true)
+    assert.equal(service.manual_terminal_lookup, true)
+    assert.equal(service.pause_resume_idempotent, true)
+    assert.equal(service.post_manual_restart_no_duplicate, true)
+  } else assert.equal(service.actual_github_push_observed, true)
+  if (process.env.OPSPILOT_PUBLIC_READ_API === '1') {
+    assert.equal(service.authenticated_read_api_verified, true)
+    assert.equal(service.live_revocation, true)
+    assert.equal(service.read_snapshots, 2)
+  }
+  result = {
+    ...service,
+    nonce,
+    scope:
+      process.env.OPSPILOT_MANUAL_HTTP === '1'
+        ? 'PUBLIC_GITHUB_SYSTEMD_MANUAL_HTTP'
+        : 'PUBLIC_GITHUB_SYSTEMD_EXECUTION',
+    runtime_nonce: runtime.nonce,
+    artifact_sha256: runtime.bundle_sha256
+  }
+} catch {
+  result = { status: 'FAIL', nonce, code: 'PUBLIC_SYSTEMD_LAB_FAILED' }
+}
+writeFileSync(join(directory, 'result.json'), JSON.stringify(result, null, 2) + '\n')
+console.log(JSON.stringify(result))
+process.exitCode = result.status === 'PASS' ? 0 : 1

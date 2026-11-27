@@ -1,3 +1,19 @@
+import type { DesktopProjectReconnectionReviewInput, DesktopProjectReconnectionReview, DesktopProjectReconnectionConfirmInput, DesktopProjectReconnection } from './desktopProjectReconnection';
+import type { DesktopReconnectedPostgresInspectionInput, DesktopReconnectedPostgresInspectionResult } from './desktopReconnectedPostgresInspection';
+import type { DesktopPostgresContext, DesktopPostgresIntentInput, DesktopPostgresIntent } from './desktopProductPostgres';
+import type { DesktopPostgresInspectionInput, DesktopPostgresInspectionResult } from './desktopPostgresInspection';
+import type { DesktopEnvironmentContext, DesktopEnvironmentPrepareInput, DesktopEnvironmentIntent, DesktopEnvironmentSelectionPrepareInput, DesktopEnvironmentSelectionIntent } from './desktopProductEnvironment';
+import type { ControllerAdoptionReviewInput, ControllerAdoptionReview, ControllerAdoptionConfirmInput, ControllerAdoptionResult } from './controllerAdoption'
+import type { ControllerAuthorityReviewInput, ControllerAuthorityReview, ControllerAuthorityConfirmInput, ControllerAuthorityResult } from './controllerAuthority'
+import type { ControllerUpgradeOverview, ControllerUpgradeReviewInput, ControllerUpgradeReview, ControllerUpgradeSendInput, ControllerUpgradeBindingReview, DesktopUpgrade } from './controllerUpgrade'
+import type { DesktopExposureInput, DesktopExposureResult } from './desktopControllerExposure'
+import type {DesktopTargetPrepareInput,DesktopTargetSendInput,DesktopTargetSetup} from './desktopTargetRegistration';
+import type { ControllerInstallerOverview, ControllerInstallerReview, ControllerInstallerSendInput, ControllerInstalledRegisterInput, ControllerInstalledPrepareInput, DesktopInstallation } from './controllerInstaller';
+import type { DesktopProjectReadiness, DesktopFirstDeploymentInput, DesktopFirstDeploymentPlan, DesktopFirstDeploymentSendInput } from './desktopFirstDeployment';
+import type { DesktopProjectSetupInput, DesktopProjectSetup, DesktopProjectTargets, DesktopProjectSourceVerification, DesktopProjectTargetInput, DesktopProjectTargetState } from './desktopProjectRegistration';
+import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktopControllerCommands';
+import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput, DesktopControllerAppStatus } from './desktopController'
+
 /**
  * HỢP ĐỒNG: IPC giữa Electron main và renderer.
  *
@@ -360,6 +376,80 @@ export interface DomainIngressActionInput extends DomainIngressStatusInput {
 }
 
 export interface IpcInvokeMap {
+  'controller:list': () => IpcResult<DesktopControllerConnection[]>;
+  'controller:review-ssh-authority': (input: ControllerAuthorityReviewInput) => IpcResult<ControllerAuthorityReview>;
+  'controller:confirm-ssh-authority': (input: ControllerAuthorityConfirmInput) => IpcResult<ControllerAuthorityResult>;
+  'controller:review-adoption': (input: ControllerAdoptionReviewInput) => IpcResult<ControllerAdoptionReview>;
+  'controller:confirm-adoption': (input: ControllerAdoptionConfirmInput) => IpcResult<ControllerAdoptionResult>;
+  'controller:upgrade-overview': () => IpcResult<ControllerUpgradeOverview>;
+  'controller:review-upgrade': (input: ControllerUpgradeReviewInput) => IpcResult<ControllerUpgradeReview>;
+  'controller:prepare-upgrade': (input: { plan_id: string }) => IpcResult<DesktopUpgrade>;
+  'controller:send-upgrade': (input: ControllerUpgradeSendInput) => IpcResult<DesktopUpgrade>;
+  'controller:inspect-upgrade': (key: string) => IpcResult<DesktopUpgrade>;
+  'controller:cancel-upgrade': (key: string) => IpcResult<DesktopUpgrade>;
+  'controller:review-upgrade-binding': (input: { binding_id: string; request_key: string }) => IpcResult<ControllerUpgradeBindingReview>;
+  'controller:refresh-upgrade-binding': (input: { plan_id: string; consent: true }) => IpcResult<DesktopControllerConnection>;
+  'controller:installer-overview': () => IpcResult<ControllerInstallerOverview>;
+  'controller:review-installation': (input: { vps_id: number; release_id: string }) => IpcResult<ControllerInstallerReview>;
+  'controller:prepare-installation': (input: { plan_id: string }) => IpcResult<DesktopInstallation>;
+  'controller:send-installation': (input: ControllerInstallerSendInput) => IpcResult<DesktopInstallation>;
+  'controller:inspect-installation': (key: string) => IpcResult<DesktopInstallation>;
+  'controller:rebind-installation': (input: { plan_id: string; request_key: string; confirm: true }) => IpcResult<DesktopInstallation>;
+  'controller:cancel-installation': (key: string) => IpcResult<DesktopInstallation>;
+  'controller:prepare-installed-binding': (input: ControllerInstalledPrepareInput) => IpcResult<DesktopControllerConnection>;
+  'controller:register-installed': (input: ControllerInstalledRegisterInput) => IpcResult<DesktopControllerConnection>;
+  'controller:register': (input: DesktopControllerRegisterInput) => IpcResult<DesktopControllerConnection>;
+  'controller:retry-enrollment': (bindingId: string) => IpcResult<DesktopControllerConnection>;
+  'controller:revoke': (bindingId: string) => IpcResult<DesktopControllerConnection>;
+  'controller:disconnect': (bindingId: string) => IpcResult<DesktopControllerConnection>;
+  'controller:apps': (input: DesktopControllerPageInput) => IpcResult<DesktopControllerSnapshot>;
+  'controller:app-status': (input: { binding_id: string; app_id: number }) => IpcResult<DesktopControllerAppStatus>;
+  'controller:exposure-read': (input: DesktopExposureInput) => IpcResult<DesktopExposureResult>;
+  'controller:exposure-check': (input: DesktopExposureInput) => IpcResult<DesktopExposureResult>;
+  'controller:prepare-command': (input: DesktopControllerCommandInput) => IpcResult<DesktopControllerCommand>;
+  'controller:send-command': (key: string) => IpcResult<DesktopControllerCommand>;
+  'controller:check-command': (key: string) => IpcResult<DesktopControllerCommand>;
+  'controller:cancel-command': (key: string) => IpcResult<DesktopControllerCommand>;
+  'controller:commands': (bindingId: string) => IpcResult<DesktopControllerCommand[]>;
+  'controller:prepare-target': (input:DesktopTargetPrepareInput) => IpcResult<DesktopTargetSetup>;
+  'controller:send-target': (input:DesktopTargetSendInput) => IpcResult<DesktopTargetSetup>;
+  'controller:target-setups': (bindingId:string) => IpcResult<DesktopTargetSetup[]>;
+  'controller:cancel-target': (key:string) => IpcResult<DesktopTargetSetup>;
+  'controller:review-project-reconnection': (input: DesktopProjectReconnectionReviewInput) => IpcResult<DesktopProjectReconnectionReview>;
+  'controller:confirm-project-reconnection': (input: DesktopProjectReconnectionConfirmInput) => IpcResult<DesktopProjectReconnection>;
+  'controller:current-project-reconnection': (key: string) => IpcResult<DesktopProjectReconnection>;
+  'controller:latest-project-reconnection': (input: DesktopProjectReconnectionReviewInput) => IpcResult<DesktopProjectReconnection | null>;
+  'controller:inspect-reconnected-postgres': (input: DesktopReconnectedPostgresInspectionInput) => IpcResult<DesktopReconnectedPostgresInspectionResult>;
+  'controller:project-readiness': (key:string) => IpcResult<DesktopProjectReadiness>;
+  'controller:prepare-first-deployment': (input:DesktopFirstDeploymentInput) => IpcResult<DesktopFirstDeploymentPlan>;
+  'controller:send-first-deployment': (input:DesktopFirstDeploymentSendInput) => IpcResult<DesktopControllerCommand>;
+  'controller:project-targets': (input: {binding_id:string;after_id?:number|null}) => IpcResult<DesktopProjectTargets>;
+  'controller:verify-project-source': (key:string) => IpcResult<DesktopProjectSourceVerification>;
+  'controller:project-target-state': (key:string) => IpcResult<DesktopProjectTargetState>;
+  'controller:enroll-project-target': (input:DesktopProjectTargetInput) => IpcResult<DesktopProjectTargetState>;
+  'controller:prepare-environment-selection': (input: DesktopEnvironmentSelectionPrepareInput) => IpcResult<DesktopEnvironmentSelectionIntent>;
+  'controller:send-environment-selection': (key: string) => IpcResult<DesktopEnvironmentSelectionIntent>;
+  'controller:check-environment-selection': (key: string) => IpcResult<DesktopEnvironmentSelectionIntent>;
+  'controller:environment-selections': (projectKey: string) => IpcResult<DesktopEnvironmentSelectionIntent[]>;
+  'controller:cancel-environment-selection': (key: string) => IpcResult<DesktopEnvironmentSelectionIntent>;
+  'controller:postgres-context': (projectKey: string) => IpcResult<DesktopPostgresContext>;
+  'controller:inspect-postgres': (input: DesktopPostgresInspectionInput) => IpcResult<DesktopPostgresInspectionResult>;
+  'controller:prepare-postgres-intent': (input: DesktopPostgresIntentInput) => IpcResult<DesktopPostgresIntent>;
+  'controller:send-postgres-intent': (key: string) => IpcResult<DesktopPostgresIntent>;
+  'controller:check-postgres-intent': (key: string) => IpcResult<DesktopPostgresIntent>;
+  'controller:postgres-intents': (projectKey: string) => IpcResult<DesktopPostgresIntent[]>;
+  'controller:cancel-postgres-intent': (key: string) => IpcResult<DesktopPostgresIntent>;
+  'controller:environment-context': (projectKey: string) => IpcResult<DesktopEnvironmentContext>;
+  'controller:prepare-environment': (input: DesktopEnvironmentPrepareInput) => IpcResult<DesktopEnvironmentIntent>;
+  'controller:send-environment': (key: string) => IpcResult<DesktopEnvironmentIntent>;
+  'controller:check-environment': (key: string) => IpcResult<DesktopEnvironmentIntent>;
+  'controller:environment-intents': (projectKey: string) => IpcResult<DesktopEnvironmentIntent[]>;
+  'controller:cancel-environment': (key: string) => IpcResult<DesktopEnvironmentIntent>;
+  'controller:prepare-project': (input: DesktopProjectSetupInput) => IpcResult<DesktopProjectSetup>;
+  'controller:send-project': (key: string) => IpcResult<DesktopProjectSetup>;
+  'controller:projects': (bindingId: string) => IpcResult<DesktopProjectSetup[]>;
+  'controller:cancel-project': (key: string) => IpcResult<DesktopProjectSetup>;
+
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;
@@ -373,6 +463,8 @@ export interface IpcInvokeMap {
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;
   'vps:delete':         (id: number) => IpcResult<void>;
   'vps:install-docker': (vpsId: number) => IpcResult<{ docker_version: string }>;
+  /** Explicit user action: check prerequisites, install Docker only when absent, prepare workdir. */
+  'vps:prepare-runtime': (input: { vps_id: number; consent: true }) => IpcResult<VpsRuntimePreparation>;
   'vps:scan':           (vpsId: number) => IpcResult<VpsScanResult>;
 
   // ── Detect & Deploy (UC-02, UC-03) ─────────────────────────────────────────
@@ -451,6 +543,8 @@ export interface IpcInvokeMap {
   'app:rollback':    (appId: number, targetDeploymentId: number) => IpcResult<{ deployment_id: number }>;
   'app:stop':        (appId: number) => IpcResult<void>;
   'app:start':       (appId: number) => IpcResult<void>;
+  'app:restart':     (appId: number) => IpcResult<void>;
+  'app:logs':        (appId: number, tailLines?: number) => IpcResult<{ container_name: string; lines: string[]; truncated: boolean }>;
 
   // ── Giám sát (UC-06, UC-07, UC-08) ─────────────────────────────────────────
   'monitor:samples': (deploymentId: number, fromTs: string) => IpcResult<MetricSample[]>;
@@ -504,8 +598,8 @@ export interface VpsInput {
   name: string;
   host: string;
   port: number;
-  /** OpenSSH SHA256 fingerprint copied from an independently trusted console. */
-  host_fingerprint: string;
+  /** Optional advanced pin. Main pins the first-contact key when absent; known endpoint pins are never silently replaced. */
+  host_fingerprint?: string;
   username: string;
   auth_type: 'key' | 'password';
   /** Private key hoặc password bản rõ — main mã hoá NGAY, không log, không ghi tạm ra đĩa */
@@ -515,6 +609,8 @@ export interface VpsInput {
 }
 
 export interface VpsConnectionCheck {
+  /** Public pin used for this check; preserve through Save. First contact is not independent console verification. */
+  host_fingerprint?: string;
   ssh_ok: boolean;
   docker_installed: boolean;
   docker_version: string | null;
@@ -523,6 +619,15 @@ export interface VpsConnectionCheck {
   steps: Array<{ label: string; ok: boolean; detail?: string }>;
   /** Khi `ssh_ok: false`: nguyên nhân + cách sửa tiếng Việt (TK-A10). Không có khi OK. */
   diagnosis?: VpsDiagnosis;
+}
+
+export interface VpsRuntimePreparation {
+  vps_id: number;
+  docker_version: string;
+  compose_version: string;
+  installed_docker: boolean;
+  workdir_ready: true;
+  checked_at: string;
 }
 
 /** Chẩn đoán nguyên nhân khi kết nối VPS thất bại (TK-A10). Mỗi lớp lỗi kèm hướng dẫn sửa
@@ -623,6 +728,8 @@ export interface DoctorEvidenceInput {
 
 export interface PrecheckResult {
   passed: boolean;
+  /** Main reports a failed Docker daemon/Compose check; renderer can offer consented runtime preparation. */
+  runtime_preparation_required?: true;
   checks: Array<{
     label: string;            // 'RAM trống'
     required: string;         // '> 512 MB'

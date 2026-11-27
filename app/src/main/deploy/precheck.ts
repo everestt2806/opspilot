@@ -95,7 +95,7 @@ export function baselineCommand(port: number | null): string {
     "printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'",
     "printf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '",
     portCheck,
-    "printf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1"
+    "printf 'DOCKER|'; if docker info --format '{{.ServerVersion}}' >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then docker --version; else echo 'NOT_READY'; fi"
   ]
     .filter((part) => part.length > 0)
     .join('\n')
@@ -158,8 +158,8 @@ export function evaluateBaseline(raw: BaselineRaw, port: number | null): Prechec
 
   checks.push({
     label: 'Docker',
-    required: 'đã cài',
-    actual: raw.dockerVersion ?? 'không tìm thấy',
+    required: 'Docker và Compose hoạt động',
+    actual: raw.dockerVersion ?? 'Docker hoặc Compose chưa sẵn sàng',
     ok: raw.dockerVersion !== null
   })
 
@@ -193,6 +193,7 @@ export function toPrecheckResult(
     passed: detail.passed,
     checks: detail.checks,
     assigned_host_port: assignedHostPort,
-    app_url: `http://${vpsHost}:${assignedHostPort}`
+    app_url: `http://${vpsHost}:${assignedHostPort}`,
+    ...(detail.dockerVersion === null ? { runtime_preparation_required: true } : {})
   }
 }

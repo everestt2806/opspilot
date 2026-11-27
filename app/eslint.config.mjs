@@ -12,6 +12,9 @@ export default defineConfig(
       '**/dist',
       '**/out',
       '**/.out-scripts',
+      // Payload/controller dependency bundles là artifact có hash riêng, không phải source lint.
+      'resources/controller-releases/**',
+      'resources/ml-runtime/**',
       'src/shared/ipc.ts',
       'src/main/detectors/types.ts'
     ]

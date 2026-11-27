@@ -1,0 +1,65 @@
+/** Internal readiness/recovery trước khi service được quyền claim công việc mới. */
+export const PRODUCT_RESOURCE_MIN_RAM_BYTES = 512 * 1024 * 1024;
+export const PRODUCT_RESOURCE_MIN_DISK_BYTES = 2 * 1024 * 1024 * 1024;
+export const PRODUCT_STARTUP_MAX_RECORDS = 100;
+
+export type ProductResourceEvidence = Readonly<{
+  cpu_count: number;
+  available_ram_bytes: number;
+  workspace_available_bytes: number;
+  docker_ready?: boolean;
+  port_ready?: boolean;
+}>;
+export type ProductAdmissionDecision = Readonly<{
+  state: "ready" | "deferred";
+  reason: "resource_unavailable" | "resource_unknown" | null;
+}>;
+export type ProductStartupRecoveryReport = Readonly<{
+  state: "ready" | "reconciliation_required" | "aborted";
+  inspected_enrollments: number;
+  recovered_terminals: number;
+  blockers: ReadonlyArray<
+    Readonly<{
+      app_id: number | null;
+      attempt_id: string | null;
+      reason:
+        | "enrollment_not_ready"
+        | "terminal_not_settled"
+        | "preterminal_unknown"
+        | "scan_limit"
+        | "authority_unavailable";
+    }>
+  >;
+}>;
+
+/**
+ * CLI `recover-runtime --data-dir <private controller directory>` nhận JSON stdin
+ * `run-product --data-dir ...` dùng cùng input, chỉ Linux; startup recovery hoàn tất
+ * trước khi worker claim. Không tự tạo credential/target enrollment/unpause.
+ * Default `run` vẫn polling-only; health service_state=maintenance khi polling-only
+ * hoặc đang khởi động/dừng, degraded khi recovery/admission/worker/poller blocked,
+ * ready chỉ khi execution configured và readiness cho phép. Loopback health tối thiểu.
+ * {format:1,artifact:<absolute approved bundle entrypoint>,manifest_sha256:<independent pin>}.
+ * Chỉ inspect/settle; JSON state phải là ready, exit 0 không tự chứng minh đã sẵn sàng.
+ * Lệnh không bật worker hay unpause ứng dụng. Không credential trong argv/stdout.
+ *
+ * Management host: Linux MemAvailable + data filesystem available, cpu_count>=1.
+ * Target: SSH principal/profile đối chiếu current SQLite trước/sau read-only probe;
+ * workspace và /opt/opspilot filesystem, Docker response, port trống hoặc owned current container.
+ * RAM/disk phải lớn hơn ngưỡng; malformed/missing/cancelled observation không nhận ready.
+ * Đây là snapshot admission, không reservation tài nguyên và không đo mọi Docker storage mount.
+ * Startup đóng admission tới khi reconcile enrollment và pending T1 bằng exact historical key/proof.
+ * Pre-T1 unknown không tự replay/clear; không renew lease, rotate key, reinstall hoặc fetch source.
+ * Read-only inspect được phép khi có pending runtime; tuyệt đối không dùng đường first-install.
+ * Historical manifest phải khớp SQL pin và actual runtime helpers khớp current approved helper hashes.
+ * R7c: Express có thể inspect/dispatch exact retained helper trước R7b (hash/size đã bake),
+ * chỉ khi current bundle dùng exact helper R7b và hai helper guard còn lại khớp.
+ * SPA không nhận helper trước R7b/eb5c. Vẫn kiểm manifest SQL, actual remote files và HMAC proof;
+ * không re-enroll, đổi key/manifest hoặc cập nhật remote helper trong startup recovery.
+ * Không dùng management bundle SHA mới thay identity của receipt/installed release cũ.
+ * R7h-3d2: current env helperf591 cho phép giữ exact98b0 cho Express/SPA/Next,
+ * hoặc exacteb5c chỉ Express theo policy legacy trước; hai guard khác vẫn exact.
+ * Đây là retained env-free compatibility, không nâng helper hay đổi SQL pin/key.
+ * Env claim phải probe manifest có exact env-capable helper trước dispatch marker
+ * và trước mọi plaintext env file. Helper legacy không được nhận environment reference.
+ */

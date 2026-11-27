@@ -21,10 +21,10 @@ if command -v dpkg-query >/dev/null 2>&1; then \
 else printf "PACKAGE=unknown\\nTARGET_PACKAGE=unknown\\n"; fi; \
 if [ -L /usr/bin/caddy ]; then \
   target=$(readlink -- /usr/bin/caddy 2>/dev/null || true); \
-  if printf "%s\\n" "$target" | grep -Eq '^/usr/local/lib/opspilot-caddy/versions/[0-9]+\\.[0-9]+\\.[0-9]+/caddy$' && \
+  if printf "%s\\n" "$target" | grep -Eq "^/usr/local/lib/opspilot-caddy/versions/[0-9]+\\.[0-9]+\\.[0-9]+/caddy$" && \
      [ "$(readlink -e -- /usr/bin/caddy 2>/dev/null || true)" = "$target" ] && [ -f "$target" ] && [ ! -L "$target" ]; then \
     size=$(stat -c %s -- "$target" 2>/dev/null || printf 0); links=$(stat -c %h -- "$target" 2>/dev/null || printf 0); \
-    if [ "$size" -le 104857600 ] && [ "$links" -eq 1 ]; then sha256sum -- "$target" | awk '{print "BINARY_SHA256=" $1}'; \
+    if [ "$size" -le 104857600 ] && [ "$links" -eq 1 ]; then sha256sum -- "$target" | cut -d" " -f1 | sed "s/^/BINARY_SHA256=/"; \
     else printf "BINARY_SHA256=unknown\\n"; fi; \
   else printf "BINARY_SHA256=unknown\\n"; fi; \
 else printf "BINARY_SHA256=unknown\\n"; fi'`,
@@ -37,7 +37,7 @@ for path in /usr /usr/bin /usr/bin/caddy /usr/local /usr/local/lib /usr/local/li
 /etc/opspilot/caddy/OWNER /etc/opspilot/caddy/INSTALLATION /etc/opspilot/caddy/Caddyfile \
 /var /var/lib /var/lib/opspilot /var/lib/opspilot/caddy /var/lib/opspilot/caddy/production; do inspect "$path"; done; \
 target=$(readlink -- /usr/bin/caddy 2>/dev/null || true); \
-if printf "%s\\n" "$target" | grep -Eq '^/usr/local/lib/opspilot-caddy/versions/[0-9]+\\.[0-9]+\\.[0-9]+/caddy$'; then \
+if printf "%s\\n" "$target" | grep -Eq "^/usr/local/lib/opspilot-caddy/versions/[0-9]+\\.[0-9]+\\.[0-9]+/caddy$"; then \
   version_dir=\${target%/caddy}; inspect "$version_dir"; inspect "$target"; \
 fi'`,
   installation: `sudo -n sh -c 'if [ -L /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=symlink\\n"; elif [ -f /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=regular\\n"; cat /etc/opspilot/caddy/INSTALLATION; elif [ -e /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=other\\n"; else printf "KIND=missing\\n"; fi'`,

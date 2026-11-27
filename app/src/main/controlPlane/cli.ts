@@ -1,3 +1,6 @@
+import { ProductEnvironmentCommands } from './productEnvironmentCommands'
+import { ProductEnvironmentRepository } from '../db/productEnvironmentRepository'
+import { registerControllerVps } from './vpsRegistration'
 import type Database from 'better-sqlite3'
 
 import { ProductDeployRepository } from '../db/productDeployRepository'
@@ -9,20 +12,406 @@ import {
 } from './controllerDatabase'
 import { ControllerService } from './controllerService'
 import { ControlPlaneGitPoller } from './gitPoller'
+import { enrollControllerVps, initializeControllerSecrets } from './controllerEnrollment'
+import { readControllerBootstrapInput } from './controllerBootstrapInput'
+import { verifyControllerBundle } from './controllerBundle'
+import { enrollProductTarget } from './targetEnrollment'
+import { runTargetHelperUpgradeReviewCli } from './targetHelperUpgradeReview'
+import { runTargetHelperUpgradeJournalCli } from './targetHelperUpgradeJournal'
+import { runProductPostgresCli } from './productPostgresCli'
+import { ControllerStartupRecovery } from './controllerStartupRecovery'
+import { ControllerClientAuth } from './controllerClientAuth'
+import { ProductProjectRegistration } from './projectRegistration'
+import { verifyProductProjectSource } from './projectSourceVerification'
+import { readProjectTargetState, enrollProjectTarget } from './projectTarget'
+import { checkProjectReadiness } from './projectReadiness'
+import { loadControllerCredentialCipher } from './controllerSecrets'
+import { assertControllerRuntimeSchema, runControllerUpgradeCheck } from './controllerUpgradeCheck'
+import { controllerUpgradeGate } from './controllerUpgradeGate'
+import {
+  CONTROLLER_SCHEMA_COMMANDS,
+  runControllerSchemaUpgrade
+} from './controllerSchemaUpgradeCli'
 
-type Command = 'init' | 'run' | 'poll-once' | 'status'
+type Command =
+  | 'init'
+  | 'run'
+  | 'run-product'
+  | 'poll-once'
+  | 'status'
+  | 'secrets-init'
+  | 'enroll-vps'
+  | 'register-vps'
+  | 'enroll-target'
+  | 'recover-runtime'
+  | 'enroll-desktop-client'
+  | 'revoke-desktop-client'
+  | 'register-project'
+  | 'project-targets'
+  | 'verify-project-source'
+  | 'project-target-state'
+  | 'enroll-project-target'
+  | 'project-readiness'
+  | 'stage-project-environment'
+  | 'project-environment-state'
+  | 'project-environment-context'
+  | 'select-project-environment'
+  | 'project-environment-review'
+  | 'project-environment-selection-state'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
-  if (!['init', 'run', 'poll-once', 'status'].includes(commandValue)) {
+  if (
+    commandValue === 'prepare-managed-postgres' ||
+    commandValue === 'managed-postgres-state' ||
+    commandValue === 'managed-postgres-prepare-state' ||
+    commandValue === 'managed-postgres-review' ||
+    commandValue === 'select-managed-postgres' ||
+    commandValue === 'managed-postgres-selection-state' ||
+    commandValue === 'project-configuration-context' ||
+    commandValue === 'managed-postgres-inspection' ||
+    commandValue === 'project-reconnection-context'
+  ) {
+    const controller = new AbortController()
+    const stop = (): void => controller.abort()
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+    try {
+      if (process.platform !== 'linux') throw Error('PRODUCT_POSTGRES_LINUX_REQUIRED')
+      const input = await readControllerBootstrapInput(process.stdin, controller.signal)
+      await runProductPostgresCli(commandValue, parseDataDirectory(args), input, controller.signal)
+    } finally {
+      process.removeListener('SIGINT', stop)
+      process.removeListener('SIGTERM', stop)
+    }
+    return
+  }
+  if (
+    commandValue === 'review-target-helper-upgrade' ||
+    commandValue === 'prepare-target-helper-upgrade' ||
+    commandValue === 'helper-upgrade-state' ||
+    commandValue === 'apply-target-helper-upgrade' ||
+    commandValue === 'inspect-target-helper-upgrade' ||
+    commandValue === 'recover-target-helper-upgrade' ||
+    commandValue === 'cancel-target-helper-upgrade'
+  ) {
+    const controller = new AbortController()
+    const stop = (): void => controller.abort()
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+    try {
+      if (process.platform !== 'linux') throw Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+      const directory = parseDataDirectory(args)
+      const input = await readControllerBootstrapInput(process.stdin, controller.signal)
+      if (commandValue === 'review-target-helper-upgrade')
+        await runTargetHelperUpgradeReviewCli(directory, input, controller.signal)
+      else await runTargetHelperUpgradeJournalCli(commandValue, directory, input, controller.signal)
+    } finally {
+      process.removeListener('SIGINT', stop)
+      process.removeListener('SIGTERM', stop)
+    }
+    return
+  }
+  if ((CONTROLLER_SCHEMA_COMMANDS as readonly string[]).includes(commandValue)) {
+    await runControllerSchemaUpgrade(commandValue, parseDataDirectory(args))
+    return
+  }
+  if (commandValue === 'upgrade-check' || commandValue === 'upgrade-hold') {
+    await runControllerUpgradeCheck(parseDataDirectory(args), commandValue === 'upgrade-hold')
+    return
+  }
+  if (commandValue === 'verify-bundle') {
+    if (args.length !== 4 || args[0] !== '--artifact' || args[2] !== '--manifest-sha256')
+      throw new Error('USAGE')
+    console.log(JSON.stringify(verifyControllerBundle(args[1], args[3])))
+    return
+  }
+  if (
+    ![
+      'init',
+      'run',
+      'run-product',
+      'poll-once',
+      'status',
+      'secrets-init',
+      'enroll-vps',
+      'register-vps',
+      'enroll-target',
+      'recover-runtime',
+      'enroll-desktop-client',
+      'revoke-desktop-client',
+      'register-project',
+      'project-targets',
+      'verify-project-source',
+      'project-target-state',
+      'enroll-project-target',
+      'project-readiness',
+      'stage-project-environment',
+      'project-environment-state',
+      'project-environment-context',
+      'select-project-environment',
+      'project-environment-review',
+      'project-environment-selection-state'
+    ].includes(commandValue)
+  ) {
     throw new Error('USAGE')
   }
   const command = commandValue as Command
   const dataDirectory = parseDataDirectory(args)
 
+  if (command === 'run-product') {
+    if (process.platform !== 'linux') throw new Error('CONTROLLER_EXECUTION_REQUIRES_LINUX')
+    const controller = new AbortController()
+    let service: ControllerService | undefined
+    const onSignal = (): void => {
+      controller.abort()
+      service?.requestStop()
+    }
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+    try {
+      const bundle = parseExecutionBundleRequest(
+        await readControllerBootstrapInput(process.stdin, controller.signal),
+        true
+      )
+      if (controller.signal.aborted) throw new Error('CONTROLLER_EXECUTION_ABORTED')
+      // Root revision startup must never auto-migrate an interrupted protected upgrade.
+      if (Object.hasOwn(bundle, 'activation_guard')) {
+        assertControllerRuntimeSchema(dataDirectory)
+      }
+      service = new ControllerService({
+        dataDirectory,
+        executionBundle: bundle,
+        ...(Object.hasOwn(bundle, 'activation_guard')
+          ? { activationReady: controllerUpgradeGate(bundle.artifact, bundle.activation_guard) }
+          : {})
+      })
+      await service.start()
+      await service.waitForStop()
+    } finally {
+      process.removeListener('SIGINT', onSignal)
+      process.removeListener('SIGTERM', onSignal)
+      await service?.close()
+    }
+    return
+  }
+
   if (command === 'init') {
     const initialized = initializeController(dataDirectory)
     console.log(JSON.stringify({ state: 'initialized', controller_id: initialized.controllerId }))
+    return
+  }
+
+  if (
+    command === 'secrets-init' ||
+    command === 'enroll-vps' ||
+    command === 'register-vps' ||
+    command === 'enroll-target' ||
+    command === 'recover-runtime' ||
+    command === 'enroll-desktop-client' ||
+    command === 'revoke-desktop-client' ||
+    command === 'register-project' ||
+    command === 'project-targets' ||
+    command === 'verify-project-source' ||
+    command === 'project-target-state' ||
+    command === 'enroll-project-target' ||
+    command === 'project-readiness' ||
+    command === 'stage-project-environment' ||
+    command === 'project-environment-state' ||
+    command === 'project-environment-context' ||
+    command === 'select-project-environment' ||
+    command === 'project-environment-review' ||
+    command === 'project-environment-selection-state'
+  ) {
+    if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+    const controller = new AbortController()
+    const onSignal = (): void => controller.abort()
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+    let opened: ReturnType<typeof openControllerDatabase> | undefined
+    try {
+      const input =
+        command !== 'secrets-init'
+          ? await readControllerBootstrapInput(process.stdin, controller.signal)
+          : undefined
+      if (controller.signal.aborted) throw new Error('CONTROLLER_VPS_ENROLLMENT_ABORTED')
+      let recoveryBundle: ReturnType<typeof verifyControllerBundle> | undefined
+      if (command === 'recover-runtime') {
+        const request = parseExecutionBundleRequest(input)
+        recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
+      }
+      opened = openControllerDatabase(dataDirectory)
+      if (
+        [
+          'select-project-environment',
+          'project-environment-review',
+          'project-environment-selection-state'
+        ].includes(command)
+      ) {
+        const uid = process.getuid?.()
+        if (uid === undefined) throw Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+        console.log(
+          JSON.stringify(
+            await new ProductEnvironmentCommands(
+              opened.database,
+              loadControllerCredentialCipher(opened.dataDirectory),
+              opened.dataDirectory,
+              opened.controllerId,
+              `unix:${uid}`
+            )[
+              command === 'project-environment-review'
+                ? 'review'
+                : command === 'project-environment-selection-state'
+                  ? 'lookup'
+                  : 'select'
+            ](input, controller.signal)
+          )
+        )
+      } else if (
+        command === 'stage-project-environment' ||
+        command === 'project-environment-state' ||
+        command === 'project-environment-context'
+      ) {
+        const uid = process.getuid?.()
+        if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+        const environment = new ProductEnvironmentRepository(
+          opened.database,
+          loadControllerCredentialCipher(opened.dataDirectory)
+        )
+        console.log(
+          JSON.stringify(
+            command === 'stage-project-environment'
+              ? environment.stage(input, opened.controllerId, `unix:${uid}`)
+              : command === 'project-environment-context'
+                ? environment.context(input, opened.controllerId, `unix:${uid}`)
+                : environment.state(input, opened.controllerId, `unix:${uid}`)
+          )
+        )
+      } else if (command === 'project-readiness') {
+        console.log(
+          JSON.stringify(
+            await checkProjectReadiness(
+              opened.database,
+              opened.controllerId,
+              opened.dataDirectory,
+              input,
+              controller.signal
+            )
+          )
+        )
+      } else if (command === 'project-target-state' || command === 'enroll-project-target') {
+        console.log(
+          JSON.stringify(
+            command === 'project-target-state'
+              ? readProjectTargetState(
+                  opened.database,
+                  opened.controllerId,
+                  opened.dataDirectory,
+                  input
+                )
+              : await enrollProjectTarget(
+                  opened.database,
+                  opened.controllerId,
+                  opened.dataDirectory,
+                  input,
+                  controller.signal
+                )
+          )
+        )
+      } else if (command === 'verify-project-source') {
+        console.log(
+          JSON.stringify(
+            await verifyProductProjectSource(opened.database, opened.controllerId, input, {
+              signal: controller.signal,
+              cipher: loadControllerCredentialCipher(opened.dataDirectory)
+            })
+          )
+        )
+      } else if (command === 'register-project' || command === 'project-targets') {
+        const uid = process.getuid?.()
+        if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+        const registration = new ProductProjectRegistration(
+          opened.database,
+          opened.controllerId,
+          `unix:${uid}`,
+          loadControllerCredentialCipher(opened.dataDirectory)
+        )
+        console.log(
+          JSON.stringify(
+            command === 'register-project'
+              ? registration.register(input)
+              : registration.targets(input)
+          )
+        )
+      } else if (command === 'enroll-desktop-client' || command === 'revoke-desktop-client') {
+        const uid = process.getuid?.()
+        if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+        const credentials = new ControllerClientAuth(
+          opened.database,
+          opened.controllerId,
+          `unix:${uid}`
+        )
+        const result =
+          command === 'enroll-desktop-client'
+            ? credentials.enroll(input)
+            : credentials.revoke(input)
+        console.log(JSON.stringify(result))
+      } else if (command === 'recover-runtime') {
+        console.log(
+          JSON.stringify(
+            await new ControllerStartupRecovery(
+              opened.database,
+              opened.dataDirectory,
+              opened.controllerId,
+              recoveryBundle!
+            ).run(controller.signal)
+          )
+        )
+      } else if (command === 'secrets-init') {
+        initializeControllerSecrets(opened.database, opened.controllerId, opened.dataDirectory)
+        console.log(
+          JSON.stringify({ state: 'secrets_initialized', controller_id: opened.controllerId })
+        )
+      } else if (command === 'register-vps') {
+        console.log(
+          JSON.stringify(
+            await registerControllerVps(
+              opened.database,
+              opened.controllerId,
+              opened.dataDirectory,
+              `unix:${process.getuid!()}`,
+              input,
+              controller.signal
+            )
+          )
+        )
+      } else if (command === 'enroll-target') {
+        console.log(
+          JSON.stringify(
+            await enrollProductTarget(
+              opened.database,
+              opened.controllerId,
+              opened.dataDirectory,
+              input,
+              controller.signal
+            )
+          )
+        )
+      } else {
+        const result = await enrollControllerVps(
+          opened.database,
+          opened.controllerId,
+          opened.dataDirectory,
+          input,
+          controller.signal
+        )
+        console.log(JSON.stringify(result))
+      }
+    } finally {
+      process.removeListener('SIGINT', onSignal)
+      process.removeListener('SIGTERM', onSignal)
+      opened?.database.close()
+    }
     return
   }
 
@@ -79,6 +468,41 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
 function parseDataDirectory(args: string[]): string {
   if (args.length !== 2 || args[0] !== '--data-dir' || !args[1]) throw new Error('USAGE')
   return args[1]
+}
+
+function parseExecutionBundleRequest(
+  input: unknown,
+  allowGuard = false
+): {
+  artifact: string
+  manifest_sha256: string
+  activation_guard?: unknown
+} {
+  const request = input as {
+    format?: unknown
+    artifact?: unknown
+    manifest_sha256?: unknown
+    activation_guard?: unknown
+  } | null
+  if (
+    !request ||
+    !(
+      allowGuard
+        ? ['artifact,format,manifest_sha256', 'activation_guard,artifact,format,manifest_sha256']
+        : ['artifact,format,manifest_sha256']
+    ).includes(Object.keys(request).sort().join(',')) ||
+    request.format !== 1 ||
+    typeof request.artifact !== 'string' ||
+    typeof request.manifest_sha256 !== 'string'
+  )
+    throw new Error('INVALID_RECOVERY_REQUEST')
+  return {
+    artifact: request.artifact,
+    manifest_sha256: request.manifest_sha256,
+    ...(Object.hasOwn(request, 'activation_guard')
+      ? { activation_guard: request.activation_guard }
+      : {})
+  }
 }
 
 function readLocalStatus(

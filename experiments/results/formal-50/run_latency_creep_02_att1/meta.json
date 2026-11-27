@@ -1,0 +1,17 @@
+{
+  "run_id": 8,
+  "scenario": "latency_creep",
+  "repeat_index": 2,
+  "attempt_index": 1,
+  "protocol_version": "1.0",
+  "status": "completed",
+  "clock_offset_ms": 412,
+  "detection_grace_s": 60,
+  "counts": {
+    "metric_sample": 455,
+    "score_sample": 2275,
+    "alert": 19,
+    "experiment_run": 1
+  },
+  "shard": "shard2"
+}

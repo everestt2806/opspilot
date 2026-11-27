@@ -1,0 +1,17 @@
+{
+  "run_id": 33,
+  "scenario": "memory_leak",
+  "repeat_index": 10,
+  "attempt_index": 1,
+  "protocol_version": "1.0",
+  "status": "completed",
+  "clock_offset_ms": 392,
+  "detection_grace_s": 60,
+  "counts": {
+    "metric_sample": 449,
+    "score_sample": 2245,
+    "alert": 14,
+    "experiment_run": 1
+  },
+  "shard": "shard2"
+}

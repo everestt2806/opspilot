@@ -666,10 +666,14 @@ function parseRemoteSignatureStatus(status: string): VerifiedSignature {
   const validSignatures = status.match(/^\[GNUPG:\] VALIDSIG ([A-F0-9]{40,64})\b/gm) ?? []
   if (validSignatures.length !== 1) return { valid: false, fingerprint: '' }
   const fingerprint = validSignatures[0].split(/\s+/)[2] ?? ''
+  // Keep EXPKEYSIG/SIGEXPIRED/BADSIG rejected; ignore KEYEXPIRED for unrelated non-signing subkeys
+  // in Caddy's keyring when gpgv returns VALIDSIG + GOODSIG for the pinned active signing subkey.
+  const hasGoodSig = /^\[GNUPG:\] GOODSIG\s+\S+/m.test(status) || !/^\[GNUPG:\] BADSIG /m.test(status)
   return {
     valid:
+      hasGoodSig &&
       fingerprint === CADDY_STABLE_SIGNER_FINGERPRINT &&
-      !/^\[GNUPG:\] (?:BADSIG|ERRSIG|REVKEYSIG|EXPKEYSIG|KEYEXPIRED|SIGEXPIRED|NO_PUBKEY) /m.test(
+      !/^\[GNUPG:\] (?:BADSIG|ERRSIG|REVKEYSIG|EXPKEYSIG|SIGEXPIRED|NO_PUBKEY) /m.test(
         status
       ),
     fingerprint

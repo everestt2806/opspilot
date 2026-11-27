@@ -149,7 +149,10 @@ def apply_plan(
         while now_fn() < target:
             if check_fn is not None:
                 check_fn()
-            sleep_fn(min(1.0, target - now_fn()))
+            remaining = target - now_fn()
+            if remaining <= 0:
+                break
+            sleep_fn(min(1.0, remaining))
         if check_fn is not None:
             check_fn()
         try:

@@ -1,0 +1,8 @@
+{
+  "release_id": "linux-x64-node22-20261113-spa-retained",
+  "node_version": "22.23.4",
+  "minimum_glibc": "2.39",
+  "release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+  "installer_sha256": "8ac74cd54097de33346fc1053dc09fa349520a29b64882f95250c5866e512d0c",
+  "upgrade_supported": true
+}

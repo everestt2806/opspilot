@@ -19,7 +19,9 @@ vi.mock('./domain/ingress/preflight', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./domain/ingress/preflight')>()),
   preflightSharedIngress: ingressPreflightMock
 }))
-vi.mock('./domain/ingress/dnsReadiness', () => ({ checkSharedIngressReadiness: readinessCheckMock }))
+vi.mock('./domain/ingress/dnsReadiness', () => ({
+  checkSharedIngressReadiness: readinessCheckMock
+}))
 
 import { AppError } from './errors'
 import { handle, registerIpcHandlers } from './ipc'
@@ -31,6 +33,258 @@ import { DeploymentRepository } from './db/deploymentRepository'
 import { DomainRepository } from './domain/repository'
 import { VpsRepository } from './db/vpsRepository'
 import type { SharedIngressServiceResult } from './domain/ingress/sharedIngressService'
+import type { DesktopControllerService } from './controlPlane/desktopControllerService'
+
+describe('metadata-only controller IPC composition', () => {
+  it('registers concrete controller channels and preserves safe metadata/error DTOs', async () => {
+    handleMock.mockReset()
+    const service = {
+      list: vi.fn(async () => []),
+      register: vi.fn(async (input) => ({ binding_id: input.binding_id, state: 'pending' })),
+      retry: vi.fn(async () => {
+        throw new AppError('VALIDATION', 'Controller request failed.', {
+          cause: new Error('BINDING_CHANGED')
+        })
+      }),
+      revoke: vi.fn(async () => ({ state: 'disabled' })),
+      disconnect: vi.fn(async () => ({ state: 'disabled' })),
+      apps: vi.fn(async () => ({ items: [] })),
+      appStatus: vi.fn(async () => ({ app_id: 1 })),
+      prepareCommand: vi.fn(async () => ({ request_key: 'unit', state: 'prepared' })),
+      sendCommand: vi.fn(async () => ({ request_key: 'unit', state: 'outcome_unknown' })),
+      checkCommand: vi.fn(async () => ({ request_key: 'unit', state: 'accepted' })),
+      cancelCommand: vi.fn(async () => ({ request_key: 'unit', state: 'cancelled' })),
+      listCommands: vi.fn(async () => []),
+      projectTargets: vi.fn(async () => ({ items: [] })),
+      prepareEnvironmentSelection: vi.fn(async () => ({ state: 'prepared' })),
+      sendEnvironmentSelection: vi.fn(async () => ({ state: 'prepared' })),
+      checkEnvironmentSelection: vi.fn(async () => ({ state: 'prepared' })),
+      listEnvironmentSelections: vi.fn(async () => ({ state: 'prepared' })),
+      cancelEnvironmentSelection: vi.fn(async () => ({ state: 'prepared' })),
+      postgresContext: vi.fn(async () => ({ state: 'prepared' })),
+      reviewProjectReconnection: vi.fn(async () => ({ state: 'review' })),
+      confirmProjectReconnection: vi.fn(async () => ({ state: 'confirmed' })),
+      currentProjectReconnection: vi.fn(async () => ({ state: 'current' })),
+      projectReconnectionHistory: vi.fn(async () => null),
+      inspectReconnectedPostgres: vi.fn(async () => ({ state: 'inspected' })),
+      inspectPostgres: vi.fn(async () => ({ state: 'prepared' })),
+      preparePostgresIntent: vi.fn(async () => ({ state: 'prepared' })),
+      sendPostgresIntent: vi.fn(async () => ({ state: 'prepared' })),
+      checkPostgresIntent: vi.fn(async () => ({ state: 'prepared' })),
+      listPostgresIntents: vi.fn(async () => ({ state: 'prepared' })),
+      cancelPostgresIntent: vi.fn(async () => ({ state: 'prepared' })),
+      environmentContext: vi.fn(async () => ({ state: 'prepared' })),
+      prepareEnvironment: vi.fn(async () => ({ state: 'prepared' })),
+      sendEnvironment: vi.fn(async () => ({ state: 'prepared' })),
+      checkEnvironment: vi.fn(async () => ({ state: 'prepared' })),
+      listEnvironmentIntents: vi.fn(async () => ({ state: 'prepared' })),
+      cancelEnvironment: vi.fn(async () => ({ state: 'prepared' })),
+      prepareProject: vi.fn(async () => ({ state: 'prepared' })),
+      sendProject: vi.fn(async () => ({ state: 'registered' })),
+      listProjects: vi.fn(async () => []),
+      cancelProject: vi.fn(async () => ({ state: 'cancelled' })),
+      verifyProjectSource: vi.fn(async () => ({ state: 'source_verified' })),
+      projectTargetState: vi.fn(async () => ({ state: 'not_prepared' })),
+      prepareTarget: vi.fn(async () => ({ state: 'prepared' })),
+      sendTarget: vi.fn(async () => ({ state: 'registered' })),
+      listTargetSetups: vi.fn(async () => []),
+      cancelTarget: vi.fn(async () => ({ state: 'cancelled' })),
+      projectReadiness: vi.fn(async () => ({ state: 'blocked' })),
+      prepareFirstDeployment: vi.fn(async () => ({ command: { state: 'prepared' } })),
+      sendFirstDeployment: vi.fn(async () => ({ state: 'accepted' })),
+      enrollProjectTarget: vi.fn(async () => ({ state: 'unknown' })),
+      installerOverview: vi.fn(async () => ({ releases: [], installations: [], connections: [] })),
+      upgradeOverview: vi.fn(async () => ({
+        releases: [],
+        installations: [],
+        upgrades: [],
+        connections: []
+      })),
+      reviewUpgrade: vi.fn(async () => ({ plan_id: 'review' })),
+      reviewControllerAdoption: vi.fn(async () => ({ plan_id: 'adoption-review' })),
+      confirmControllerAdoption: vi.fn(async () => ({ enrollment_required: true })),
+      reviewControllerAuthority: vi.fn(async () => ({ plan_id: 'authority-review' })),
+      confirmControllerAuthority: vi.fn(async () => ({ binding_refresh_required: true })),
+      prepareUpgrade: vi.fn(async () => ({ state: 'prepared' })),
+      sendUpgrade: vi.fn(async () => ({ state: 'outcome_unknown' })),
+      inspectUpgrade: vi.fn(async () => ({ state: 'active' })),
+      cancelUpgrade: vi.fn(async () => ({ state: 'cancelled' })),
+      reviewUpgradeBinding: vi.fn(async () => ({ plan_id: 'binding-review' })),
+      refreshUpgradeBinding: vi.fn(async () => ({ state: 'active' })),
+      reviewInstaller: vi.fn(async () => ({ next: 'blocked' })),
+      prepareInstaller: vi.fn(async () => ({ state: 'prepared' })),
+      sendInstaller: vi.fn(async () => ({ state: 'outcome_unknown' })),
+      inspectInstallation: vi.fn(async () => ({ state: 'installed' })),
+      rebindInstaller: vi.fn(async () => ({ state: 'outcome_unknown' })),
+      cancelInstallation: vi.fn(async () => ({ state: 'cancelled' })),
+      prepareInstalledRegistration: vi.fn(async () => ({ state: 'pending' })),
+      registerInstalled: vi.fn(async () => ({ state: 'active' }))
+    }
+    registerIpcHandlers(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      () => null,
+      undefined,
+      undefined,
+      {} as never,
+      service as unknown as DesktopControllerService
+    )
+    const channels = handleMock.mock.calls
+      .map(([name]) => name)
+      .filter((name: string) => name.startsWith('controller:'))
+    expect(channels.sort()).toEqual(
+      [
+        'controller:app-status',
+        'controller:apps',
+        'controller:cancel-command',
+        'controller:cancel-environment',
+        'controller:cancel-environment-selection',
+        'controller:cancel-installation',
+        'controller:cancel-postgres-intent',
+        'controller:cancel-project',
+        'controller:cancel-target',
+        'controller:cancel-upgrade',
+        'controller:check-command',
+        'controller:check-environment',
+        'controller:check-environment-selection',
+        'controller:check-postgres-intent',
+        'controller:commands',
+        'controller:confirm-adoption',
+        'controller:confirm-ssh-authority',
+        'controller:disconnect',
+        'controller:enroll-project-target',
+        'controller:environment-context',
+        'controller:environment-intents',
+        'controller:environment-selections',
+        'controller:exposure-check',
+        'controller:exposure-read',
+        'controller:inspect-installation',
+        'controller:inspect-upgrade',
+        'controller:installer-overview',
+        'controller:list',
+        'controller:prepare-command',
+        'controller:prepare-environment',
+        'controller:prepare-environment-selection',
+        'controller:prepare-first-deployment',
+        'controller:prepare-installation',
+        'controller:prepare-installed-binding',
+        'controller:inspect-postgres',
+        'controller:review-project-reconnection',
+        'controller:confirm-project-reconnection',
+        'controller:current-project-reconnection',
+        'controller:latest-project-reconnection',
+        'controller:inspect-reconnected-postgres',
+        'controller:postgres-context',
+        'controller:postgres-intents',
+        'controller:prepare-postgres-intent',
+        'controller:prepare-project',
+        'controller:prepare-target',
+        'controller:prepare-upgrade',
+        'controller:project-readiness',
+        'controller:project-target-state',
+        'controller:project-targets',
+        'controller:projects',
+        'controller:rebind-installation',
+        'controller:refresh-upgrade-binding',
+        'controller:register',
+        'controller:register-installed',
+        'controller:retry-enrollment',
+        'controller:review-adoption',
+        'controller:review-installation',
+        'controller:review-ssh-authority',
+        'controller:review-upgrade',
+        'controller:review-upgrade-binding',
+        'controller:revoke',
+        'controller:send-command',
+        'controller:send-environment',
+        'controller:send-environment-selection',
+        'controller:send-first-deployment',
+        'controller:send-installation',
+        'controller:send-postgres-intent',
+        'controller:send-project',
+        'controller:send-target',
+        'controller:send-upgrade',
+        'controller:target-setups',
+        'controller:upgrade-overview',
+        'controller:verify-project-source'
+      ].sort()
+    )
+    expect(await ingressCallback('controller:list')({}, undefined)).toEqual({ ok: true, data: [] })
+    expect(await ingressCallback('controller:register')({}, { binding_id: 'unit' })).toMatchObject({
+      ok: true,
+      data: { binding_id: 'unit', state: 'pending' }
+    })
+    expect(await ingressCallback('controller:retry-enrollment')({}, 'unit')).toMatchObject({
+      ok: false,
+      error: { technical: 'BINDING_CHANGED' }
+    })
+    expect(channels).not.toContain('controller:call')
+    expect(await ingressCallback('controller:installer-overview')({}, undefined)).toMatchObject({
+      ok: true,
+      data: { releases: [], installations: [], connections: [] }
+    })
+    expect(service.installerOverview).toHaveBeenCalledWith()
+    for (const [channel, method] of [
+      ['controller:prepare-environment-selection', 'prepareEnvironmentSelection'],
+      ['controller:send-environment-selection', 'sendEnvironmentSelection'],
+      ['controller:check-environment-selection', 'checkEnvironmentSelection'],
+      ['controller:environment-selections', 'listEnvironmentSelections'],
+      ['controller:cancel-environment-selection', 'cancelEnvironmentSelection'],
+      ['controller:postgres-context', 'postgresContext'],
+      ['controller:review-project-reconnection', 'reviewProjectReconnection'],
+      ['controller:confirm-project-reconnection', 'confirmProjectReconnection'],
+      ['controller:current-project-reconnection', 'currentProjectReconnection'],
+      ['controller:latest-project-reconnection', 'projectReconnectionHistory'],
+      ['controller:inspect-reconnected-postgres', 'inspectReconnectedPostgres'],
+      ['controller:inspect-postgres', 'inspectPostgres'],
+      ['controller:prepare-postgres-intent', 'preparePostgresIntent'],
+      ['controller:send-postgres-intent', 'sendPostgresIntent'],
+      ['controller:check-postgres-intent', 'checkPostgresIntent'],
+      ['controller:postgres-intents', 'listPostgresIntents'],
+      ['controller:cancel-postgres-intent', 'cancelPostgresIntent'],
+      ['controller:environment-context', 'environmentContext'],
+      ['controller:prepare-environment', 'prepareEnvironment'],
+      ['controller:send-environment', 'sendEnvironment'],
+      ['controller:check-environment', 'checkEnvironment'],
+      ['controller:environment-intents', 'listEnvironmentIntents'],
+      ['controller:cancel-environment', 'cancelEnvironment'],
+      ['controller:prepare-target', 'prepareTarget'],
+      ['controller:send-target', 'sendTarget'],
+      ['controller:target-setups', 'listTargetSetups'],
+      ['controller:cancel-target', 'cancelTarget'],
+      ['controller:project-readiness', 'projectReadiness'],
+      ['controller:prepare-first-deployment', 'prepareFirstDeployment'],
+      ['controller:send-first-deployment', 'sendFirstDeployment'],
+      ['controller:prepare-command', 'prepareCommand'],
+      ['controller:send-command', 'sendCommand'],
+      ['controller:check-command', 'checkCommand'],
+      ['controller:cancel-command', 'cancelCommand'],
+      ['controller:commands', 'listCommands'],
+      ['controller:project-targets', 'projectTargets'],
+      ['controller:prepare-project', 'prepareProject'],
+      ['controller:send-project', 'sendProject'],
+      ['controller:projects', 'listProjects'],
+      ['controller:cancel-project', 'cancelProject'],
+      ['controller:verify-project-source', 'verifyProjectSource'],
+      ['controller:project-target-state', 'projectTargetState'],
+      ['controller:enroll-project-target', 'enrollProjectTarget'],
+      ['controller:review-installation', 'reviewInstaller'],
+      ['controller:prepare-installation', 'prepareInstaller'],
+      ['controller:send-installation', 'sendInstaller'],
+      ['controller:inspect-installation', 'inspectInstallation'],
+      ['controller:rebind-installation', 'rebindInstaller'],
+      ['controller:cancel-installation', 'cancelInstallation'],
+      ['controller:prepare-installed-binding', 'prepareInstalledRegistration'],
+      ['controller:register-installed', 'registerInstalled']
+    ] as const) {
+      expect(await ingressCallback(channel)({}, 'unit')).toMatchObject({ ok: true })
+      expect(service[method]).toHaveBeenCalledWith('unit')
+    }
+  })
+})
 
 function ingressCallback(channel: string): (event: unknown, input: unknown) => Promise<unknown> {
   const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
@@ -913,22 +1167,49 @@ describe('handle', () => {
           {} as never,
           () => null
         )
-        const callback = handleMock.mock.calls.find(([channel]) => channel === 'domain:ingress-readiness')?.[1] as (
+        const callback = handleMock.mock.calls.find(
+          ([channel]) => channel === 'domain:ingress-readiness'
+        )?.[1] as (
           event: unknown,
-          input: { vps_id: number; hostname: string; cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown' }
+          input: {
+            vps_id: number
+            hostname: string
+            cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown'
+          }
         ) => Promise<unknown>
-        const before = db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()
+        const before = db
+          .prepare(
+            'SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1'
+          )
+          .get()
 
-        await expect(callback({}, {
-          vps_id: 1, hostname: 'App.Example.com.', cloudflare_proxy_hint: 'enabled'
-        })).resolves.toEqual({ ok: true, data: readiness })
+        await expect(
+          callback(
+            {},
+            {
+              vps_id: 1,
+              hostname: 'App.Example.com.',
+              cloudflare_proxy_hint: 'enabled'
+            }
+          )
+        ).resolves.toEqual({ ok: true, data: readiness })
 
         expect(ingressPreflightMock).toHaveBeenCalledWith(ssh, 1)
-        expect(readinessCheckMock).toHaveBeenCalledWith(expect.objectContaining({
-          hostname: 'app.example.com', vpsHost: '93.184.216.34',
-          cloudflareProxyHint: 'enabled', ingress: { ports_status: 'free', local_assessment: 'clear' }
-        }))
-        expect(db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()).toEqual(before)
+        expect(readinessCheckMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            hostname: 'app.example.com',
+            vpsHost: '93.184.216.34',
+            cloudflareProxyHint: 'enabled',
+            ingress: { ports_status: 'free', local_assessment: 'clear' }
+          })
+        )
+        expect(
+          db
+            .prepare(
+              'SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1'
+            )
+            .get()
+        ).toEqual(before)
       } finally {
         closeDatabase()
         rmSync(dir, { recursive: true, force: true })
@@ -1148,7 +1429,11 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'conflict' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
+          .get('app.example.com') as {
+          status: string
+          dns_status: string
+          dns_evidence_json: string
+        }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('conflict')
         expect(binding.dns_status).toBe('conflict')
@@ -1214,7 +1499,11 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'failed' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
+          .get('app.example.com') as {
+          status: string
+          dns_status: string
+          dns_evidence_json: string
+        }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('failed')
         expect(binding.dns_status).toBe('failed')
@@ -1341,5 +1630,55 @@ describe('handle', () => {
         rmSync(dir, { recursive: true, force: true })
       }
     })
+  })
+
+  it('registers app:stop, app:start, app:restart, app:logs, and db:* handlers', async () => {
+    const stopApp = vi.fn(async () => {})
+    const startApp = vi.fn(async () => {})
+    const restartApp = vi.fn(async () => {})
+    const readAppLogs = vi.fn(async () => ({
+      container_name: 'demo-app',
+      lines: ['line 1'],
+      truncated: false
+    }))
+    registerIpcHandlers(
+      { getPort: () => null } as never,
+      {} as never,
+      {} as never,
+      { stopApp, startApp, restartApp, readAppLogs } as never,
+      {} as never,
+      () => null
+    )
+    const callbackFor = (
+      channel: string
+    ): ((event: unknown, ...args: unknown[]) => Promise<unknown>) => {
+      const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
+      expect(callback).toBeTypeOf('function')
+      return callback as (event: unknown, ...args: unknown[]) => Promise<unknown>
+    }
+    await expect(callbackFor('app:stop')({}, 42)).resolves.toEqual({ ok: true, data: undefined })
+    await expect(callbackFor('app:start')({}, 42)).resolves.toEqual({ ok: true, data: undefined })
+    await expect(callbackFor('app:restart')({}, 42)).resolves.toEqual({ ok: true, data: undefined })
+    await expect(callbackFor('app:logs')({}, 42, 200)).resolves.toEqual({
+      ok: true,
+      data: { container_name: 'demo-app', lines: ['line 1'], truncated: false }
+    })
+    expect(stopApp).toHaveBeenCalledWith(42)
+    expect(startApp).toHaveBeenCalledWith(42)
+    expect(restartApp).toHaveBeenCalledWith(42)
+    expect(readAppLogs).toHaveBeenCalledWith(42, 200)
+    for (const ch of [
+      'db:list-databases',
+      'db:create-database',
+      'db:list-users',
+      'db:create-user',
+      'db:list-tables',
+      'db:save-schema',
+      'db:import-data',
+      'db:export-data',
+      'db:query'
+    ]) {
+      expect(handleMock.mock.calls.some(([registered]) => registered === ch)).toBe(true)
+    }
   })
 })

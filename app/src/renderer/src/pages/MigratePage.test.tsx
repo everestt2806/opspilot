@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { App, MigrateEvent, MigrateJobView, Vps } from '@shared/ipc'
@@ -611,21 +611,25 @@ describe('MigratePage UI-1j-a', () => {
 
     render(<MigratePage />)
 
-    // Events arrive while migrate:list is still fetching
-    eventCallback!({
-      type: 'log',
-      job_id: 7,
-      step: 'TRANSFER',
-      chunk: '[EARLY_LIST_FETCH_LOG] Synchronizing files...'
-    })
-    eventCallback!({
-      type: 'verify-result',
-      job_id: 7,
-      rows: [{ label: 'Database', source: '5 tables', target: '5 tables', ok: true }]
-    })
+    // Flush the external IPC callback and list promise as React updates, preserving their order.
+    await act(async () => {
+      // Events arrive while migrate:list is still fetching
+      eventCallback!({
+        type: 'log',
+        job_id: 7,
+        step: 'TRANSFER',
+        chunk: '[EARLY_LIST_FETCH_LOG] Synchronizing files...'
+      })
+      eventCallback!({
+        type: 'verify-result',
+        job_id: 7,
+        rows: [{ label: 'Database', source: '5 tables', target: '5 tables', ok: true }]
+      })
 
-    // Now migrate:list finishes
-    resolveList!({ ok: true, data: [baseJob] })
+      // Now migrate:list finishes
+      resolveList!({ ok: true, data: [baseJob] })
+      await listPromise
+    })
 
     // Both the early log and verify row must be rendered after job restore
     await waitFor(() => {

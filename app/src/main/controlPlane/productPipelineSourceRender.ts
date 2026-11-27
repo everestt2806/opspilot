@@ -1,3 +1,11 @@
+import type { ResolvedProductEnvironment } from '../../../../docs/contracts/product-environment-runtime'
+import type { ProductEnvironmentRuntime } from './productEnvironmentRuntime'
+import type { ResolvedProductPostgres } from '../../../../docs/contracts/product-postgres'
+import { ProductPostgresPreflight } from './productPostgresPreflight'
+import type { ProductPostgresRuntime } from './productPostgresRuntime'
+import { renderProductPostgresTransfer } from './productPostgresRuntime'
+import { renderProductRuntimeEnv, renderProductPublicBuild } from './productEnvironmentRuntime'
+import { canonicalH2Json } from './productH2Proof'
 import { createHash } from 'node:crypto'
 import { lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
@@ -18,6 +26,7 @@ import { DeploymentRepository } from '../db/deploymentRepository'
 import { ProductDeployRepository } from '../db/productDeployRepository'
 import { detectFramework } from '../detectors'
 import { buildSourceTree } from '../detectors/sourceTree'
+import { resolveNextStart } from '../detectors/helpers'
 import type { BuildPlan } from '../detectors/types'
 import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shouldExcludeUploadPath } from '../ssh/manager'
@@ -31,6 +40,7 @@ import {
 import { resolveCollectorDir, resolveCollectorAppPath } from '../deploy/pipeline'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
 import { GuardedSshExecutionSession, openProductGuardedSshSession } from './guardedSshSession'
+import { ProductEnvironmentPreflight } from './productEnvironmentPreflight'
 
 type TransferFile = {
   path: string
@@ -50,7 +60,7 @@ export type ProductSourceRenderResult = Readonly<{
   source_manifest_sha256: string
   render_file_count: number
   render_bytes: number
-  render_manifest_sha256: string
+  render_manifest_sha256: string | null
   finalization: 'not_implemented_remote_outcome_unknown'
 }>
 
@@ -87,7 +97,10 @@ export function redactSecrets(text: string): string {
 export function validatePreflightSourceAndPlan(
   database: Database.Database,
   snapshot: PreparedProductGitSnapshot,
-  collectorDirectory = resolveCollectorDir()
+  collectorDirectory = resolveCollectorDir(),
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null,
+  postgres?: ResolvedProductPostgres | null
 ): {
   app: App
   plan: BuildPlan
@@ -95,29 +108,179 @@ export function validatePreflightSourceAndPlan(
   sourceFiles: TransferFile[]
   sourceManifest: { totalBytes: number; sha256: string }
 } {
-  const app = new AppRepository(database).getById(snapshot.claim.app_id)
-  const sourceTree = buildSourceTree(snapshot.rootDirectory)
+  return validateProductSourceAndPlan(
+    database,
+    snapshot.claim.app_id,
+    snapshot.rootDirectory,
+    collectorDirectory,
+    templatesDirectory,
+    configuration,
+    postgres
+  )
+}
+
+/** Cùng preflight cho source onboarding và snapshot của execution claim. */
+export function validateProductSourceAndPlan(
+  database: Database.Database,
+  appId: number,
+  rootDirectory: string,
+  collectorDirectory = resolveCollectorDir(),
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null,
+  postgres?: ResolvedProductPostgres | null
+): ReturnType<typeof validateSourceAndPlan> {
+  return validateSourceAndPlan(
+    database,
+    appId,
+    rootDirectory,
+    collectorDirectory,
+    templatesDirectory,
+    configuration,
+    undefined,
+    postgres
+  )
+}
+
+/** Kiểm tra nguồn bằng metadata; không tạo runtime env-file hoặc execution capability. */
+export function validateProductSourceForReview(
+  database: Database.Database,
+  appId: number,
+  rootDirectory: string,
+  collectorDirectory: string,
+  templatesDirectory: string,
+  metadata: ProductEnvironmentPreflight | null,
+  postgresMetadata: ProductPostgresPreflight | null = null
+): ReturnType<typeof validateSourceAndPlan> {
+  if (metadata && !(metadata instanceof ProductEnvironmentPreflight))
+    throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+  if (postgresMetadata && !(postgresMetadata instanceof ProductPostgresPreflight))
+    throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+  return validateSourceAndPlan(
+    database,
+    appId,
+    rootDirectory,
+    collectorDirectory,
+    templatesDirectory,
+    null,
+    metadata,
+    null,
+    postgresMetadata
+  )
+}
+
+function validateSourceAndPlan(
+  database: Database.Database,
+  appId: number,
+  rootDirectory: string,
+  collectorDirectory: string,
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null,
+  review?: ProductEnvironmentPreflight | null,
+  postgres?: ResolvedProductPostgres | null,
+  postgresReview?: ProductPostgresPreflight | null
+): {
+  app: App
+  plan: BuildPlan
+  sourceTree: ReturnType<typeof buildSourceTree>
+  sourceFiles: TransferFile[]
+  sourceManifest: { totalBytes: number; sha256: string }
+} {
+  // Chỉ resolver theo claim hiện hành mới cấp cấu hình; onboarding chưa có resolver vẫn fail closed.
+  const currentSource = database
+    .prepare(
+      `SELECT s.deploy_config_json FROM product_source_config s
+    JOIN product_app_control c ON c.app_id=s.app_id AND c.source_generation=s.source_generation WHERE c.app_id=?`
+    )
+    .get(appId) as { deploy_config_json: string } | undefined
+  if (currentSource) {
+    let config: unknown
+    try {
+      config = JSON.parse(currentSource.deploy_config_json)
+    } catch {
+      throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+    }
+    if (
+      !config ||
+      typeof config !== 'object' ||
+      Array.isArray(config) ||
+      (Object.hasOwn(config, 'environment') &&
+        ((!configuration && !review) ||
+          (configuration?.claim.app_id ?? review?.appId) !== appId ||
+          (configuration?.claim.source_config_sha256 ?? review?.sourceHash) !==
+            createHash('sha256').update(canonicalH2Json(config)).digest('hex') ||
+          canonicalH2Json((config as Record<string, unknown>).environment) !==
+            canonicalH2Json(configuration?.reference ?? review?.reference))) ||
+      (!Object.hasOwn(config, 'environment') && (!!configuration || !!review)) ||
+      (Object.hasOwn(config, 'database') &&
+        ((!postgres && !postgresReview) ||
+          (postgres?.claim.app_id ?? postgresReview?.appId) !== appId ||
+          (postgres?.claim.source_config_sha256 ?? postgresReview?.sourceHash) !==
+            createHash('sha256').update(canonicalH2Json(config)).digest('hex') ||
+          canonicalH2Json((config as Record<string, unknown>).database) !==
+            canonicalH2Json(postgres?.reference ?? postgresReview?.reference))) ||
+      (!Object.hasOwn(config, 'database') && (!!postgres || !!postgresReview))
+    )
+      throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+  }
+  const app = new AppRepository(database).getById(appId)
+  const sourceTree = buildSourceTree(rootDirectory)
   const detection = detectFramework(sourceTree)
   if (
-    app.framework !== 'express' ||
-    app.needs_db !== 0 ||
+    !['express', 'static-spa', 'nextjs'].includes(app.framework) ||
+    app.needs_db !== (postgres || postgresReview ? 1 : 0) ||
+    ((postgres || postgresReview) &&
+      (app.framework === 'static-spa' ||
+        (postgres?.metadata.framework ?? postgresReview?.metadata.framework) !== app.framework)) ||
     !detection.matched ||
-    detection.detector !== 'express' ||
-    detection.plan.needsDb ||
-    detection.plan.requiredEnv.length > 0
+    detection.detector !== app.framework ||
+    (app.framework !== 'express' && app.container_port !== detection.plan.containerPort) ||
+    (detection.plan.needsDb && !postgres && !postgresReview) ||
+    detection.plan.requiredEnv.some(
+      (name) =>
+        !(app.framework === 'nextjs' && name === 'NODE_ENV') &&
+        !((postgres || postgresReview) && name === 'DATABASE_URL') &&
+        ((!configuration && !review) ||
+          !(configuration
+            ? Object.hasOwn(configuration.values.runtime_env, name) ||
+              Object.hasOwn(configuration.values.public_build_args, name)
+            : review!.metadata.runtime_keys.includes(name) ||
+              review!.metadata.public_build_keys.includes(name)))
+    ) ||
+    ((configuration || review) &&
+      ((configuration?.framework ?? review?.metadata.framework) !== app.framework ||
+        Object.keys(detection.plan.buildArgs).some((name) =>
+          configuration
+            ? !Object.hasOwn(configuration.values.public_build_args, name)
+            : !review!.metadata.public_build_keys.includes(name)
+        ))) ||
+    (app.framework === 'nextjs' &&
+      ((!configuration && !review && Object.keys(detection.plan.buildArgs).length > 0) ||
+        resolveNextStart(sourceTree).entry !== undefined))
   ) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
   const sourceFiles = [
-    ...collectFiles(snapshot.rootDirectory, 'src'),
+    ...collectFiles(rootDirectory, 'src'),
     ...collectFiles(collectorDirectory, 'collector')
   ]
   const sourceManifest = prepareManifest(sourceFiles)
-  const renderFiles = renderPlanFiles(app, detection.plan, sourceTree)
+  const renderFiles = renderPlanFiles(
+    app,
+    detection.plan,
+    sourceTree,
+    undefined,
+    templatesDirectory,
+    configuration,
+    postgres
+  )
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
-    sourceManifest.totalBytes + renderManifest.totalBytes > GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES
+    sourceManifest.totalBytes +
+      renderManifest.totalBytes +
+      (review ? 160 * 1024 : 0) +
+      (postgresReview ? 96 * 1024 : 0) >
+      GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES
   )
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_LIMIT_EXCEEDED')
   return { app, plan: detection.plan, sourceTree, sourceFiles, sourceManifest }
@@ -133,13 +296,21 @@ export async function stageProductSourceAndRenderWithSession(
   snapshot: PreparedProductGitSnapshot,
   options: {
     collector_directory?: string
+    templates_directory?: string
     signal?: AbortSignal
+    environment?: ProductEnvironmentRuntime
+    postgres?: ProductPostgresRuntime
   } = {}
 ): Promise<ProductSourceRenderResult> {
+  const configuration = options.environment?.resolve(session.deploymentId)
+  const postgres = options.postgres?.resolve(session.deploymentId)
   const { app, plan, sourceTree, sourceFiles, sourceManifest } = validatePreflightSourceAndPlan(
     database,
     snapshot,
-    options.collector_directory
+    options.collector_directory,
+    options.templates_directory,
+    configuration,
+    postgres
   )
 
   const deployment = new DeploymentRepository(database).getById(session.deploymentId)
@@ -153,7 +324,15 @@ export async function stageProductSourceAndRenderWithSession(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
   }
 
-  const renderFiles = renderPlanFiles(app, plan, sourceTree, deployment.image_tag)
+  const renderFiles = renderPlanFiles(
+    app,
+    plan,
+    sourceTree,
+    deployment.image_tag,
+    options.templates_directory,
+    configuration,
+    postgres
+  )
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
@@ -175,7 +354,7 @@ export async function stageProductSourceAndRenderWithSession(
     source_manifest_sha256: sourceManifest.sha256,
     render_file_count: renderFiles.length,
     render_bytes: renderManifest.totalBytes,
-    render_manifest_sha256: renderManifest.sha256,
+    render_manifest_sha256: configuration || postgres ? null : renderManifest.sha256,
     finalization: 'not_implemented_remote_outcome_unknown'
   }
 }
@@ -389,7 +568,10 @@ function renderPlanFiles(
   app: App,
   plan: BuildPlan,
   sourceTree: ReturnType<typeof buildSourceTree>,
-  imageTag?: string
+  imageTag?: string,
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null,
+  postgres?: ResolvedProductPostgres | null
 ): TransferFile[] {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(app.name)) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
@@ -410,18 +592,36 @@ function renderPlanFiles(
   const rendered = [
     {
       path: 'Dockerfile',
-      content: renderDockerfile(plan.dockerfileTemplate, {
-        ...vars,
-        BUILD_COMMAND: plan.buildCommand,
-        BUILD_ARGS: renderBuildArgs(plan.buildArgs)
-      }),
+      content: renderDockerfile(
+        plan.dockerfileTemplate,
+        {
+          ...vars,
+          BUILD_COMMAND: plan.buildCommand,
+          BUILD_ARGS: configuration
+            ? renderProductPublicBuild(configuration.values.public_build_args)
+            : renderBuildArgs(plan.buildArgs)
+        },
+        templatesDirectory
+      ),
       mode: 0o644
     },
-    { path: 'docker-compose.yml', content: renderCompose(vars, false), mode: 0o644 },
-    { path: '.env', content: buildEnvFile({}, false).content, mode: 0o600 }
+    {
+      path: 'docker-compose.yml',
+      content: renderCompose(vars, false, templatesDirectory),
+      mode: 0o644
+    },
+    {
+      path: '.env',
+      content:
+        (postgres ? renderProductPostgresTransfer(postgres) : '') +
+        (configuration ? renderProductRuntimeEnv(configuration) : buildEnvFile({}, false).content),
+      mode: 0o600
+    }
   ]
   return rendered.map(({ path, content, mode }) => {
     const bytes = Buffer.from(content, 'utf8')
+    if (path === '.env' && bytes.length > 96 * 1024)
+      throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_LIMIT_EXCEEDED')
     return {
       path,
       localPath: '',

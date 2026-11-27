@@ -388,4 +388,62 @@ describe('C02 activation episodes', () => {
     ).toEqual({ count: 2 })
     expect(db.prepare('SELECT COUNT(*) AS count FROM score_sample').get()).toEqual({ count: 15 })
   })
+
+  it('syncs app generation without false rotation or CHECK failure when v2 activates before v1 is polled', async () => {
+    const db = seed()
+    const activation = new ActivationRepository(db)
+    const v1Ep = activation.prepare(1, 1, { generation: 'pending-first-generation' }, 1, 'deploy')
+    activation.activate(v1Ep, null)
+    db.prepare('UPDATE app SET metrics_stream_generation=?, metrics_offset=1 WHERE id=1').run(
+      'pending-first-generation'
+    )
+
+    addDeployment(db, 2)
+    const line1 = `${metric(1)}\n`
+    const line2 = `${metric(2)}\n`
+    const start2 = Buffer.byteLength(line1) + 1
+    const v2Ep = activation.prepare(1, 2, { generation: '64769:809338' }, start2, 'deploy')
+    activation.activate(v2Ep, v1Ep)
+
+    await new MonitorPoller(db).poll(1, 2, source(`${line1}${line2}`, '64769:809338'))
+
+    expect(db.prepare('SELECT metrics_stream_generation FROM app WHERE id=1').get()).toEqual({
+      metrics_stream_generation: '64769:809338'
+    })
+    expect(db.prepare('SELECT deployment_id, seq FROM metric_sample ORDER BY seq').all()).toEqual([
+      { deployment_id: 2, seq: 2 }
+    ])
+  })
+
+  it('closes previous active episode without CHECK error when new stream starts at smaller offset', () => {
+    const db = seed()
+    const activation = new ActivationRepository(db)
+    const ep1 = activation.prepare(1, 1, { generation: 'inode-old' }, 2724838, 'deploy')
+    activation.activate(ep1, null)
+
+    addDeployment(db, 2)
+    const ep2 = activation.prepare(1, 2, { generation: 'inode-new' }, 2815, 'deploy')
+    activation.activate(ep2, ep1)
+
+    const closed = db
+      .prepare('SELECT state, start_offset, end_offset FROM deployment_activation WHERE id=?')
+      .get(ep1) as { state: string; start_offset: number; end_offset: number }
+    expect(closed).toEqual({ state: 'closed', start_offset: 2724838, end_offset: 2724838 })
+  })
+
+  it('prefers newest matching episode when same stream_generation is reused after reset', () => {
+    const db = seed()
+    const activation = new ActivationRepository(db)
+    const oldEp = activation.prepare(1, 1, { generation: '64769:794763' }, 1, 'deploy')
+    activation.activate(oldEp, null)
+    activation.closeActive(1, 14363)
+
+    addDeployment(db, 2)
+    const newEp = activation.prepare(1, 2, { generation: '64769:794763' }, 2820, 'deploy')
+    activation.activate(newEp, null)
+
+    const episodes = activation.episodes(1, '64769:794763')
+    expect(activation.route(episodes, 2820)).toBe(2)
+    expect(activation.route(episodes, 10244)).toBe(2)
+  })
 })

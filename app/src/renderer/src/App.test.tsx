@@ -777,4 +777,35 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       expect(vps.validation.hostFingerprintFormat).toContain('SHA256:...')
     }
   })
+
+  it('shows persistent notification when system:auto-rollback arrives', async () => {
+    const handlers: Record<string, (payload: unknown) => void> = {}
+    vi.stubGlobal('api', {
+      invoke: vi.fn(async () => ({ ok: true, data: [] })),
+      on: vi.fn((channel: string, cb: (payload: unknown) => void) => {
+        handlers[channel] = cb
+        return () => {}
+      })
+    })
+    useUiState.setState({ locale: 'en', activePage: 'dashboard' })
+    render(<App />)
+
+    expect(handlers['system:auto-rollback']).toBeTypeOf('function')
+    act(() => {
+      handlers['system:auto-rollback']({
+        app_id: 1,
+        from_version: 2,
+        to_version: 1,
+        method: 'ensemble',
+        alert_id: 5
+      })
+    })
+
+    expect(await screen.findByText('Automatic rollback triggered')).toBeTruthy()
+    expect(
+      await screen.findByText(
+        'Rolled back automatically from v2 to v1 after ensemble anomaly alerts.'
+      )
+    ).toBeTruthy()
+  })
 })

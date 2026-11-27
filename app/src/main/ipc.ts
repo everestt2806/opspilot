@@ -14,7 +14,9 @@ import { AppError, toIpcError } from './errors'
 import type { HistoryService } from './history/service'
 import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
-import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
+import { readVpsResources } from './vps/connectionService'
+import { VpsOnboarding } from './vps/onboarding'
+import { VpsRuntimePreparationService } from './vps/runtimePreparation'
 import { readVpsOperationalDiagnostics } from './vps/operationalDiagnostics'
 import { discoverVpsApps } from './vps/discovery'
 import { VpsAppImportService } from './vps/importService'
@@ -41,7 +43,9 @@ import { DeploymentRepository } from './db/deploymentRepository'
 import { DoctorFixService } from './doctor/fix'
 import { DoctorRepository } from './doctor/repository'
 import { VpsRepository } from './db/vpsRepository'
+import { VpsPostgresService } from './db/vpsPostgresService'
 import { db as database } from './db'
+import type { DesktopControllerService } from './controlPlane/desktopControllerService'
 
 export interface WindowController {
   minimize(): void
@@ -169,8 +173,168 @@ export function registerIpcHandlers(
   getWindow: () => WindowController | null,
   monitorService?: MonitorService,
   migrateService?: MigrateService,
-  sharedIngressService?: SharedIngressService
+  sharedIngressService?: SharedIngressService,
+  desktopControllerService?: DesktopControllerService
 ): void {
+  if (desktopControllerService) {
+    handle('controller:review-adoption', (input) =>
+      desktopControllerService.reviewControllerAdoption(input)
+    )
+    handle('controller:confirm-adoption', (input) =>
+      desktopControllerService.confirmControllerAdoption(input)
+    )
+    handle('controller:review-ssh-authority', (input) =>
+      desktopControllerService.reviewControllerAuthority(input)
+    )
+    handle('controller:confirm-ssh-authority', (input) =>
+      desktopControllerService.confirmControllerAuthority(input)
+    )
+    handle('controller:upgrade-overview', () => desktopControllerService.upgradeOverview())
+    handle('controller:review-upgrade', (input) => desktopControllerService.reviewUpgrade(input))
+    handle('controller:prepare-upgrade', (input) => desktopControllerService.prepareUpgrade(input))
+    handle('controller:send-upgrade', (input) => desktopControllerService.sendUpgrade(input))
+    handle('controller:inspect-upgrade', (key) => desktopControllerService.inspectUpgrade(key))
+    handle('controller:cancel-upgrade', (key) => desktopControllerService.cancelUpgrade(key))
+    handle('controller:review-upgrade-binding', (input) =>
+      desktopControllerService.reviewUpgradeBinding(input)
+    )
+    handle('controller:refresh-upgrade-binding', (input) =>
+      desktopControllerService.refreshUpgradeBinding(input)
+    )
+    handle('controller:installer-overview', () => desktopControllerService.installerOverview())
+    handle('controller:review-installation', (input) =>
+      desktopControllerService.reviewInstaller(input)
+    )
+    handle('controller:prepare-installation', (input) =>
+      desktopControllerService.prepareInstaller(input)
+    )
+    handle('controller:send-installation', (input) => desktopControllerService.sendInstaller(input))
+    handle('controller:inspect-installation', (key) =>
+      desktopControllerService.inspectInstallation(key)
+    )
+    handle('controller:rebind-installation', (input) =>
+      desktopControllerService.rebindInstaller(input)
+    )
+    handle('controller:cancel-installation', (key) =>
+      desktopControllerService.cancelInstallation(key)
+    )
+    handle('controller:prepare-installed-binding', (input) =>
+      desktopControllerService.prepareInstalledRegistration(input)
+    )
+    handle('controller:register-installed', (input) =>
+      desktopControllerService.registerInstalled(input)
+    )
+    handle('controller:list', () => desktopControllerService.list())
+    handle('controller:register', (input) => desktopControllerService.register(input))
+    handle('controller:retry-enrollment', (bindingId) => desktopControllerService.retry(bindingId))
+    handle('controller:revoke', (bindingId) => desktopControllerService.revoke(bindingId))
+    handle('controller:disconnect', (bindingId) => desktopControllerService.disconnect(bindingId))
+    handle('controller:apps', (input) => desktopControllerService.apps(input))
+    handle('controller:app-status', (input) => desktopControllerService.appStatus(input))
+    handle('controller:exposure-read', (input) => desktopControllerService.exposure(input))
+    handle('controller:exposure-check', (input) => desktopControllerService.exposure(input, true))
+    handle('controller:prepare-command', (input) => desktopControllerService.prepareCommand(input))
+    handle('controller:send-command', (key) => desktopControllerService.sendCommand(key))
+    handle('controller:check-command', (key) => desktopControllerService.checkCommand(key))
+    handle('controller:cancel-command', (key) => desktopControllerService.cancelCommand(key))
+    handle('controller:commands', (bindingId) => desktopControllerService.listCommands(bindingId))
+    handle('controller:prepare-target', (input) => desktopControllerService.prepareTarget(input))
+    handle('controller:send-target', (input) => desktopControllerService.sendTarget(input))
+    handle('controller:target-setups', (binding) =>
+      desktopControllerService.listTargetSetups(binding)
+    )
+    handle('controller:cancel-target', (key) => desktopControllerService.cancelTarget(key))
+    handle('controller:review-project-reconnection', (input) =>
+      desktopControllerService.reviewProjectReconnection(input)
+    )
+    handle('controller:confirm-project-reconnection', (input) =>
+      desktopControllerService.confirmProjectReconnection(input)
+    )
+    handle('controller:current-project-reconnection', (key) =>
+      desktopControllerService.currentProjectReconnection(key)
+    )
+    handle('controller:latest-project-reconnection', (input) =>
+      desktopControllerService.projectReconnectionHistory(input)
+    )
+    handle('controller:inspect-reconnected-postgres', (input) =>
+      desktopControllerService.inspectReconnectedPostgres(input)
+    )
+    handle('controller:project-readiness', (key) => desktopControllerService.projectReadiness(key))
+    handle('controller:prepare-first-deployment', (input) =>
+      desktopControllerService.prepareFirstDeployment(input)
+    )
+    handle('controller:send-first-deployment', (input) =>
+      desktopControllerService.sendFirstDeployment(input)
+    )
+    handle('controller:project-targets', (input) => desktopControllerService.projectTargets(input))
+    handle('controller:project-target-state', (key) =>
+      desktopControllerService.projectTargetState(key)
+    )
+    handle('controller:enroll-project-target', (input) =>
+      desktopControllerService.enrollProjectTarget(input)
+    )
+    handle('controller:verify-project-source', (key) =>
+      desktopControllerService.verifyProjectSource(key)
+    )
+    handle('controller:prepare-environment-selection', (input) =>
+      desktopControllerService.prepareEnvironmentSelection(input)
+    )
+    handle('controller:send-environment-selection', (input) =>
+      desktopControllerService.sendEnvironmentSelection(input)
+    )
+    handle('controller:check-environment-selection', (input) =>
+      desktopControllerService.checkEnvironmentSelection(input)
+    )
+    handle('controller:environment-selections', (input) =>
+      desktopControllerService.listEnvironmentSelections(input)
+    )
+    handle('controller:cancel-environment-selection', (input) =>
+      desktopControllerService.cancelEnvironmentSelection(input)
+    )
+    handle('controller:postgres-context', (input) =>
+      desktopControllerService.postgresContext(input)
+    )
+    handle('controller:inspect-postgres', (input) =>
+      desktopControllerService.inspectPostgres(input)
+    )
+    handle('controller:prepare-postgres-intent', (input) =>
+      desktopControllerService.preparePostgresIntent(input)
+    )
+    handle('controller:send-postgres-intent', (input) =>
+      desktopControllerService.sendPostgresIntent(input)
+    )
+    handle('controller:check-postgres-intent', (input) =>
+      desktopControllerService.checkPostgresIntent(input)
+    )
+    handle('controller:postgres-intents', (input) =>
+      desktopControllerService.listPostgresIntents(input)
+    )
+    handle('controller:cancel-postgres-intent', (input) =>
+      desktopControllerService.cancelPostgresIntent(input)
+    )
+    handle('controller:environment-context', (input) =>
+      desktopControllerService.environmentContext(input)
+    )
+    handle('controller:prepare-environment', (input) =>
+      desktopControllerService.prepareEnvironment(input)
+    )
+    handle('controller:send-environment', (input) =>
+      desktopControllerService.sendEnvironment(input)
+    )
+    handle('controller:check-environment', (input) =>
+      desktopControllerService.checkEnvironment(input)
+    )
+    handle('controller:environment-intents', (input) =>
+      desktopControllerService.listEnvironmentIntents(input)
+    )
+    handle('controller:cancel-environment', (input) =>
+      desktopControllerService.cancelEnvironment(input)
+    )
+    handle('controller:prepare-project', (input) => desktopControllerService.prepareProject(input))
+    handle('controller:send-project', (key) => desktopControllerService.sendProject(key))
+    handle('controller:projects', (bindingId) => desktopControllerService.listProjects(bindingId))
+    handle('controller:cancel-project', (key) => desktopControllerService.cancelProject(key))
+  }
   const ingressService =
     sharedIngressService ??
     new SharedIngressService({
@@ -182,22 +346,14 @@ export function registerIpcHandlers(
       policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
     })
   handle('vps:list', () => vpsService.list())
-  handle('vps:create', (input) => vpsService.create(input))
-  handle('vps:update', (id, patch) => vpsService.update(id, patch))
+  const onboarding = new VpsOnboarding(new VpsRepository(database), vpsService)
+  handle('vps:create', (input) => onboarding.create(input))
+  handle('vps:update', (id, patch) => onboarding.update(id, patch))
   handle('vps:delete', async (id) => {
     vpsService.delete(id)
     await ssh.disconnect(id)
   })
-  handle('vps:test-connection', (input) =>
-    testConnectionWithCredentials({
-      host: input.host,
-      port: input.port,
-      hostFingerprint: input.host_fingerprint ?? null,
-      username: input.username,
-      authType: input.auth_type,
-      secret: input.secret
-    })
-  )
+  handle('vps:test-connection', (input) => onboarding.test(input))
   handle('vps:get-resources', (vpsId) => readVpsResources(ssh, vpsId))
   handle('vps:get-operational-diagnostics', (vpsId) => readVpsOperationalDiagnostics(ssh, vpsId))
   handle('vps:discover-apps', (vpsId) => discoverVpsApps(ssh, vpsId))
@@ -212,6 +368,12 @@ export function registerIpcHandlers(
     vpsService.recordDockerInstalled(vpsId, dockerVersion)
     return { docker_version: dockerVersion }
   })
+  const runtimePreparation = new VpsRuntimePreparationService(
+    ssh,
+    new VpsRepository(database),
+    vpsService
+  )
+  handle('vps:prepare-runtime', (input) => runtimePreparation.prepare(input))
   handle('vps:scan', async (vpsId) => {
     const result = await scanVpsEnvironment(ssh, vpsId)
     const docker = result.items.find((item) => item.key === 'docker')
@@ -319,15 +481,20 @@ export function registerIpcHandlers(
     if (!['enabled', 'disabled', 'unknown'].includes(proxyHint)) {
       throw new AppError('VALIDATION', 'Gợi ý Cloudflare Proxy không hợp lệ.')
     }
-    const binding = database.prepare(
-      `SELECT b.hostname, b.mode, v.host
+    const binding = database
+      .prepare(
+        `SELECT b.hostname, b.mode, v.host
        FROM domain_binding b
        JOIN app a ON a.id = b.app_id
        JOIN vps v ON v.id = a.vps_id
        WHERE b.hostname = ? AND v.id = ? AND v.archived_at IS NULL`
-    ).get(hostname, input.vps_id) as { hostname: string; mode: string; host: string } | undefined
+      )
+      .get(hostname, input.vps_id) as { hostname: string; mode: string; host: string } | undefined
     if (!binding || binding.mode !== 'shared_ingress') {
-      throw new AppError('VALIDATION', 'Không tìm thấy shared_ingress binding cho hostname và VPS đã chọn.')
+      throw new AppError(
+        'VALIDATION',
+        'Không tìm thấy shared_ingress binding cho hostname và VPS đã chọn.'
+      )
     }
     const ingress = await preflightSharedIngress(ssh, input.vps_id)
     return checkSharedIngressReadiness({
@@ -492,6 +659,10 @@ export function registerIpcHandlers(
   handle('app:rollback', (appId, targetDeploymentId) =>
     deployService.rollback(appId, targetDeploymentId)
   )
+  handle('app:stop', (appId) => deployService.stopApp(appId))
+  handle('app:start', (appId) => deployService.startApp(appId))
+  handle('app:restart', (appId) => deployService.restartApp(appId))
+  handle('app:logs', (appId, tailLines) => deployService.readAppLogs(appId, tailLines))
 
   if (migrateService) {
     handle('migrate:start', (input) => migrateService.start(input))
@@ -501,6 +672,21 @@ export function registerIpcHandlers(
   }
 
   handle('history:list', (filter) => historyService.list(filter))
+
+  const postgresService = new VpsPostgresService(database, ssh)
+  handle('db:list-databases', (vpsId) => postgresService.listDatabases(vpsId))
+  handle('db:create-database', (vpsId, name) => postgresService.createDatabase(vpsId, name))
+  handle('db:list-users', (vpsId) => postgresService.listUsers(vpsId))
+  handle('db:create-user', (vpsId, input) => postgresService.createUser(vpsId, input))
+  handle('db:list-tables', (vpsId, dbName) => postgresService.listTables(vpsId, dbName))
+  handle('db:save-schema', (vpsId, dbName, ddl) => postgresService.saveSchema(vpsId, dbName, ddl))
+  handle('db:import-data', (vpsId, dbName, input) =>
+    postgresService.importData(vpsId, dbName, input)
+  )
+  handle('db:export-data', (vpsId, dbName, format) =>
+    postgresService.exportData(vpsId, dbName, format)
+  )
+  handle('db:query', (vpsId, dbName, sql) => postgresService.query(vpsId, dbName, sql))
 
   if (monitorService) {
     handle('monitor:samples', (deploymentId, fromTs) =>

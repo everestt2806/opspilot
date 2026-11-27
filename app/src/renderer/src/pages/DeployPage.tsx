@@ -43,6 +43,7 @@ import type {
 } from '@shared/ipc'
 
 import { PageHeader } from '../components/PageHeader'
+import { VpsPreparationPanel } from '../components/VpsPreparationPanel'
 
 import { useStrings } from '../strings'
 import { type DeployPreselect, useUiState } from '../store/uiState'
@@ -145,7 +146,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [optionalKeys, setOptionalKeys] = useState<string[]>([])
   const [pendingOptional, setPendingOptional] = useState<string | undefined>(undefined)
   const [configError, setConfigError] = useState<string | null>(null)
-  const [existingEnvConfirmedForAppId, setExistingEnvConfirmedForAppId] = useState<number | null>(null)
+  const [existingEnvConfirmedForAppId, setExistingEnvConfirmedForAppId] = useState<number | null>(
+    null
+  )
   const [step, setStep] = useState(0)
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null)
   const [precheckSignature, setPrecheckSignature] = useState<string | null>(null)
@@ -413,9 +416,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     setPreparedGit(result.data)
     preparedGitRef.current = result.data
     setDetection(result.data.detection)
-    setEnvValues(
-      isDeployedExistingTarget ? {} : safeRequiredEnvDefaults(result.data.detection)
-    )
+    setEnvValues(isDeployedExistingTarget ? {} : safeRequiredEnvDefaults(result.data.detection))
     setOptionalKeys([])
   }
 
@@ -802,20 +803,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       />
 
       {vpsLoading && vpsList.length === 0 ? (
-        <div
-          className="deploy-initial-loading"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '64px 0'
-          }}
-        >
+        <div className="deploy-initial-loading desktop-loading-panel">
           <Spin size="large" />
-          <Typography.Text type="secondary" style={{ marginTop: 16 }}>
-            {strings.deploy.vpsLoading}
-          </Typography.Text>
+          <Typography.Text type="secondary">{strings.deploy.vpsLoading}</Typography.Text>
         </div>
       ) : vpsLoadError ? (
         <Alert
@@ -832,11 +822,13 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       ) : vpsList.length === 0 ? (
         <Empty description={strings.deploy.noVps} />
       ) : (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Steps size="small" current={step} items={wizardSteps} />
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <div className="deploy-wizard-stepper">
+            <Steps size="small" current={step} items={wizardSteps} />
+          </div>
 
           {step === 0 && (
-            <div className="deploy-step-body">
+            <div key="step-0" className="deploy-step-body">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {vpsField}
 
@@ -1062,11 +1054,13 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           <option value="-1" disabled>
                             {strings.deploy.targetApp.selectAppPlaceholder}
                           </option>
-                          {apps.filter((app) => app.imported_from_vps !== 1).map((app) => (
-                            <option key={app.id} value={app.id}>
-                              {app.name} — port {app.host_port}
-                            </option>
-                          ))}
+                          {apps
+                            .filter((app) => app.imported_from_vps !== 1)
+                            .map((app) => (
+                              <option key={app.id} value={app.id}>
+                                {app.name} — port {app.host_port}
+                              </option>
+                            ))}
                         </select>
                       )}
                     </div>
@@ -1138,7 +1132,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
           )}
 
           {step === 1 && (
-            <div className="deploy-step-body">
+            <div key="step-1" className="deploy-step-body">
               {matches ? (
                 <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                   <Descriptions column={1} size="small" bordered>
@@ -1215,7 +1209,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
           )}
 
           {step === 2 && (
-            <div className="deploy-step-body">
+            <div key="step-2" className="deploy-step-body">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 <div>
                   <Typography.Text strong>{strings.deploy.config.appLabel}</Typography.Text>
@@ -1240,17 +1234,17 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       setExistingEnvConfirmedForAppId(null)
                       const selectedApp = apps.find((app) => app.id === value)
                       setEnvValues(
-                        selectedApp?.current_deployment_id
-                          ? {}
-                          : safeRequiredEnvDefaults(matches)
+                        selectedApp?.current_deployment_id ? {} : safeRequiredEnvDefaults(matches)
                       )
                     }}
                     options={[
                       { value: -1, label: strings.deploy.config.newApp },
-                      ...apps.filter((app) => app.imported_from_vps !== 1).map((app) => ({
-                        value: app.id,
-                        label: `${app.name} — port ${app.host_port}`
-                      }))
+                      ...apps
+                        .filter((app) => app.imported_from_vps !== 1)
+                        .map((app) => ({
+                          value: app.id,
+                          label: `${app.name} — port ${app.host_port}`
+                        }))
                     ]}
                   />
                 </div>
@@ -1364,7 +1358,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
           )}
 
           {step === 3 && (
-            <div className="deploy-step-body">
+            <div key="step-3" className="deploy-step-body">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 <Card size="small" className="deploy-review-summary-card">
                   <Descriptions
@@ -1484,6 +1478,16 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
                 {precheck && !prechecking && isPrecheckValid && (
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {precheck.runtime_preparation_required && vpsId && (
+                      <VpsPreparationPanel
+                        key={`${vpsId}:${currentConfigSignature}`}
+                        vpsId={vpsId}
+                        onPrepared={() => {
+                          invalidatePrecheck()
+                          void runPrecheck()
+                        }}
+                      />
+                    )}
                     <Table
                       size="small"
                       pagination={false}
@@ -1531,7 +1535,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
             </div>
           )}
 
-          <Space>
+          <div className="deploy-wizard-actions">
             <Button onClick={() => setStep((current) => Math.max(0, current - 1))}>
               {strings.deploy.back}
             </Button>
@@ -1579,7 +1583,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                 {starting ? strings.deploy.review.starting : strings.deploy.review.deploy}
               </Button>
             )}
-          </Space>
+          </div>
         </Space>
       )}
 
@@ -1925,61 +1929,63 @@ function DeployLogView({
         }
       />
 
-      <div className="deploy-steps-container" role="list" aria-label={strings.deploy.log.title}>
-        {SEVEN_STEPS.map((step, idx) => {
-          const state = run.steps[step]
-          const stepLabel = strings.deploy.log.steps?.[step] ?? step
-          const isDone = state.status === 'done'
-          const isRunning = state.status === 'running'
-          const isFailed = state.status === 'failed'
-          const isFirst = idx === 0
-          const isLast = idx === SEVEN_STEPS.length - 1
+      <div className="deploy-steps-card">
+        <div className="deploy-steps-container" role="list" aria-label={strings.deploy.log.title}>
+          {SEVEN_STEPS.map((step, idx) => {
+            const state = run.steps[step]
+            const stepLabel = strings.deploy.log.steps?.[step] ?? step
+            const isDone = state.status === 'done'
+            const isRunning = state.status === 'running'
+            const isFailed = state.status === 'failed'
+            const isFirst = idx === 0
+            const isLast = idx === SEVEN_STEPS.length - 1
 
-          const lineBeforeActive = isDone || isRunning || isFailed
-          const lineAfterActive = isDone
+            const lineBeforeActive = isDone || isRunning || isFailed
+            const lineAfterActive = isDone
 
-          return (
-            <div
-              key={step}
-              className={`deploy-step-col deploy-step-${state.status}`}
-              role="listitem"
-            >
-              <div className="deploy-step-track">
-                {!isFirst && (
-                  <div
-                    className={`deploy-step-line deploy-step-line-prev ${
-                      lineBeforeActive ? 'deploy-step-line-active' : ''
-                    }`}
-                  />
-                )}
-                <div className="deploy-step-marker">
-                  {isDone ? (
-                    <CheckCircleFilled className="deploy-step-icon deploy-step-icon-done" />
-                  ) : isRunning ? (
-                    <LoadingOutlined className="deploy-step-icon deploy-step-icon-running" />
-                  ) : isFailed ? (
-                    <CloseCircleFilled className="deploy-step-icon deploy-step-icon-failed" />
-                  ) : (
-                    <span className="deploy-step-badge">{idx + 1}</span>
+            return (
+              <div
+                key={step}
+                className={`deploy-step-col deploy-step-${state.status}`}
+                role="listitem"
+              >
+                <div className="deploy-step-track">
+                  {!isFirst && (
+                    <div
+                      className={`deploy-step-line deploy-step-line-prev ${
+                        lineBeforeActive ? 'deploy-step-line-active' : ''
+                      }`}
+                    />
+                  )}
+                  <div className="deploy-step-marker">
+                    {isDone ? (
+                      <CheckCircleFilled className="deploy-step-icon deploy-step-icon-done" />
+                    ) : isRunning ? (
+                      <LoadingOutlined className="deploy-step-icon deploy-step-icon-running" />
+                    ) : isFailed ? (
+                      <CloseCircleFilled className="deploy-step-icon deploy-step-icon-failed" />
+                    ) : (
+                      <span className="deploy-step-badge">{idx + 1}</span>
+                    )}
+                  </div>
+                  {!isLast && (
+                    <div
+                      className={`deploy-step-line deploy-step-line-next ${
+                        lineAfterActive ? 'deploy-step-line-active' : ''
+                      }`}
+                    />
                   )}
                 </div>
-                {!isLast && (
-                  <div
-                    className={`deploy-step-line deploy-step-line-next ${
-                      lineAfterActive ? 'deploy-step-line-active' : ''
-                    }`}
-                  />
-                )}
+                <div className="deploy-step-meta">
+                  <span className="deploy-step-label">{stepLabel}</span>
+                  {isDone && state.durationMs !== undefined && (
+                    <span className="deploy-step-time">{formatDuration(state.durationMs)}</span>
+                  )}
+                </div>
               </div>
-              <div className="deploy-step-meta">
-                <span className="deploy-step-label">{stepLabel}</span>
-                {isDone && state.durationMs !== undefined && (
-                  <span className="deploy-step-time">{formatDuration(state.durationMs)}</span>
-                )}
-              </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
 
       {finished?.status === 'running' && (
@@ -2066,8 +2072,10 @@ function DeployLogView({
       )}
 
       {finished?.status === 'running' && (
-        <div className="page-panel" style={{ marginTop: 16 }}>
-          <Typography.Title level={5}>{strings.deploy.domain.title}</Typography.Title>
+        <div className="deploy-domain-panel">
+          <Typography.Title level={5} style={{ marginTop: 0 }}>
+            {strings.deploy.domain.title}
+          </Typography.Title>
           <Space wrap>
             <Input
               placeholder={strings.deploy.domain.placeholder}

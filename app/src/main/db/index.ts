@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import Database from 'better-sqlite3'
@@ -23,14 +23,53 @@ import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?
 import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
 import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
 import migration020 from './migrations/020_product_runtime_terminal.sql?raw'
+import migration021 from './migrations/021_product_target_enrollment.sql?raw'
+import migration022 from './migrations/022_product_desktop_clients.sql?raw'
+import migration023 from './migrations/023_product_api_requests.sql?raw'
+import migration024 from './migrations/024_desktop_controller_binding.sql?raw'
+import migration025 from './migrations/025_desktop_controller_commands.sql?raw'
+import migration026 from './migrations/026_product_project_registration.sql?raw'
+import migration027 from './migrations/027_desktop_project_setup.sql?raw'
+import migration028 from './migrations/028_desktop_target_registration.sql?raw'
+import migration029 from './migrations/029_desktop_controller_installation.sql?raw'
+import migration030 from './migrations/030_desktop_controller_upgrade.sql?raw'
+import migration031 from './migrations/031_desktop_controller_authority_rebind.sql?raw'
+import migration032 from './migrations/032_product_environment_revision.sql?raw'
+import migration033 from './migrations/033_product_environment_request.sql?raw'
+import migration034 from './migrations/034_desktop_environment_intent.sql?raw'
+import migration035 from './migrations/035_product_source_environment.sql?raw'
+import migration036 from './migrations/036_desktop_environment_selection.sql?raw'
+import migration037 from './migrations/037_product_managed_postgres.sql?raw'
+import migration038 from './migrations/038_desktop_postgres_intent.sql?raw'
+import migration039 from './migrations/039_desktop_project_reconnection.sql?raw'
 
 interface Migration {
   name: string
   version: number
   sql: string
+  role?: 'desktop' | 'controller'
 }
 
 const migrations: Migration[] = [
+  { name: '039_desktop_project_reconnection.sql', version: 39, sql: migration039, role: 'desktop' },
+  { name: '038_desktop_postgres_intent.sql', version: 38, sql: migration038, role: 'desktop' },
+  { name: '037_product_managed_postgres.sql', version: 37, sql: migration037, role: 'controller' },
+  {
+    name: '036_desktop_environment_selection.sql',
+    version: 36,
+    sql: migration036,
+    role: 'desktop'
+  },
+  { name: '035_product_source_environment.sql', version: 35, sql: migration035 },
+  { name: '034_desktop_environment_intent.sql', version: 34, sql: migration034, role: 'desktop' },
+  { name: '033_product_environment_request.sql', version: 33, sql: migration033 },
+  { name: '032_product_environment_revision.sql', version: 32, sql: migration032 },
+  {
+    name: '031_desktop_controller_authority_rebind.sql',
+    version: 31,
+    sql: migration031,
+    role: 'desktop'
+  },
   {
     name: '001_init.sql',
     version: 1,
@@ -130,7 +169,45 @@ const migrations: Migration[] = [
     name: '020_product_runtime_terminal.sql',
     version: 20,
     sql: migration020
-  }
+  },
+  {
+    name: '021_product_target_enrollment.sql',
+    version: 21,
+    sql: migration021
+  },
+  {
+    name: '022_product_desktop_clients.sql',
+    version: 22,
+    sql: migration022
+  },
+  {
+    name: '023_product_api_requests.sql',
+    version: 23,
+    sql: migration023
+  },
+  {
+    name: '024_desktop_controller_binding.sql',
+    version: 24,
+    sql: migration024
+  },
+  {
+    name: '025_desktop_controller_commands.sql',
+    version: 25,
+    sql: migration025
+  },
+  {
+    name: '026_product_project_registration.sql',
+    version: 26,
+    sql: migration026
+  },
+  {
+    name: '027_desktop_project_setup.sql',
+    version: 27,
+    sql: migration027
+  },
+  { name: '028_desktop_target_registration.sql', version: 28, sql: migration028 },
+  { name: '029_desktop_controller_installation.sql', version: 29, sql: migration029 },
+  { name: '030_desktop_controller_upgrade.sql', version: 30, sql: migration030, role: 'desktop' }
 ]
 
 export let db: Database.Database
@@ -143,19 +220,55 @@ export function setMigration005TestInterceptor(
   migration005TestInterceptor = interceptor
 }
 
-export function initializeDatabase(userDataPath: string): Database.Database {
+export function initializeDatabase(
+  userDataPath: string,
+  role: 'desktop' | 'controller' = 'desktop'
+): Database.Database {
   const databasePath = join(userDataPath, 'opspilot.db')
   mkdirSync(dirname(databasePath), { recursive: true })
+
+  if (existsSync(databasePath)) {
+    // Open/status không được tự nâng035. Root migration dùng transaction tường minh;
+    // fresh initializeController đã từ chối file có sẵn trước khi tới đây.
+    assertDatabaseCanOpen(databasePath, role)
+  }
 
   db = new Database(databasePath)
   try {
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
-    runMigrations(db)
+    runMigrations(db, Number.POSITIVE_INFINITY, role)
     return db
   } catch (error) {
     db.close()
     throw error
+  }
+}
+
+/** Read-only prerequisite; không migrate/rekey. SQLite có thể mở WAL/SHM sidecar
+ * để đọc đủ committed state; không dùng immutable=1 vì sẽ bỏ qua WAL đang sống.
+ */
+export function assertControllerDatabaseCanOpen(databasePath: string): void {
+  assertDatabaseCanOpen(databasePath, 'controller')
+}
+function assertDatabaseCanOpen(databasePath: string, role: 'desktop' | 'controller'): void {
+  const inspection = new Database(databasePath, { readonly: true, fileMustExist: true })
+  try {
+    const applied = getAppliedVersions(inspection)
+    if (
+      migrations.some(
+        (migration) => migration.role && migration.role !== role && applied.has(migration.version)
+      )
+    )
+      throw new Error(
+        role === 'controller'
+          ? 'CONTROLLER_DATABASE_ROLE_MISMATCH'
+          : 'DESKTOP_DATABASE_ROLE_MISMATCH'
+      )
+    if (role === 'controller' && !applied.has(37))
+      throw new Error('CONTROLLER_SCHEMA_UPGRADE_REQUIRED')
+  } finally {
+    inspection.close()
   }
 }
 
@@ -167,14 +280,28 @@ export function closeDatabase(): void {
 
 export function runMigrations(
   database: Database.Database,
-  maxVersion = Number.POSITIVE_INFINITY
+  maxVersion = Number.POSITIVE_INFINITY,
+  role: 'desktop' | 'controller' = 'desktop'
 ): void {
   const applied = getAppliedVersions(database)
+  if (
+    role === 'controller' &&
+    migrations.some((m) => m.role === 'desktop' && applied.has(m.version))
+  )
+    throw new Error('CONTROLLER_DATABASE_ROLE_MISMATCH')
+  if (
+    role === 'desktop' &&
+    migrations.some(
+      (migration) => migration.role === 'controller' && applied.has(migration.version)
+    )
+  )
+    throw new Error('DESKTOP_DATABASE_ROLE_MISMATCH')
 
   for (const migration of migrations.toSorted((left, right) =>
     left.name.localeCompare(right.name)
   )) {
     if (migration.version > maxVersion) break
+    if (migration.role && migration.role !== role) continue
     if (applied.has(migration.version)) {
       continue
     }

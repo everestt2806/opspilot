@@ -412,7 +412,11 @@ export class MigrateService {
       this.migrations.update(job.id, {
         status: 'awaiting_confirm',
         downtime_ms: downtime,
-        verify_json: JSON.stringify({ ...verify, target_app_id: target.id })
+        verify_json: JSON.stringify({
+          ...verify,
+          rows: this.verifyRows(verify),
+          target_app_id: target.id
+        })
       })
       this.log(
         job.id,
@@ -428,7 +432,11 @@ export class MigrateService {
       const failedStatus = this.migrations.get(job.id).status
       if (lastVerify) {
         this.migrations.update(job.id, {
-          verify_json: JSON.stringify({ ...lastVerify, target_app_id: target.id })
+          verify_json: JSON.stringify({
+            ...lastVerify,
+            rows: this.verifyRows(lastVerify),
+            target_app_id: target.id
+          })
         })
       }
       await this.finishFailed(
@@ -955,6 +963,12 @@ export class MigrateService {
           verify.source_files.count === verify.target_files.count &&
           verify.source_files.bytes === verify.target_files.bytes
       },
+      ...verify.table_counts.map((item) => ({
+        label: `Database table (${item.table})`,
+        source: `${item.source} rows`,
+        target: `${item.target} rows`,
+        ok: item.ok
+      })),
       {
         label: 'HTTP and runtime',
         source: 'source running',

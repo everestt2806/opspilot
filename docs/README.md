@@ -1,85 +1,23 @@
-# Bản đồ tài liệu
+# Documentation Index
 
-> Nguyên tắc: **mỗi thông tin chỉ tồn tại ở đúng một chỗ.** File khác cần thì trỏ link,
-> không copy lại. Copy lại = hai nguồn sự thật = AI làm sai.
+Technical documentation and interface contracts for **OpsPilot**.
 
-## Thứ tự ưu tiên khi mâu thuẫn
+## Technical Contracts (Source of Truth)
 
-`docs/contracts/` → `01-ke-hoach.md` → các file còn lại.
-Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.md` sau khi sửa.
-
----
-
-## Tài liệu nền
-
-| File | Nội dung | Khi nào đọc |
-|---|---|---|
-| [`00-de-tai-goc.md`](00-de-tai-goc.md) | Đề tài đã nộp giảng viên — **bất biến**, không sửa | Khi cần đối chiếu "đã hứa gì" |
-| [`01-ke-hoach.md`](01-ke-hoach.md) | Kiến trúc chốt + spec 10 module M1–M10 + danh sách không làm | Trước khi code bất kỳ module nào |
-| [`02-ui-ux-spec.md`](02-ui-ux-spec.md) | Design token, 7 màn hình, quy tắc UX | Khi code renderer |
-| [`03-quy-trinh-team.md`](03-quy-trinh-team.md) | Git flow, nhịp làm việc, quy tắc dùng AI, review chéo | Tuần 0, và mỗi đầu tuần |
-| [`04-timeline.md`](04-timeline.md) | Lịch 16 tuần theo ngày thật, DoD từng tuần, quy tắc cắt phạm vi | Mỗi đầu tuần |
-| [`05-truy-vet-yeu-cau.md`](05-truy-vet-yeu-cau.md) | Ma trận FR/NFR → module → contract → test → màn hình → tuần | Khi cần biết "còn thiếu gì" |
-| [`06-glossary-quy-uoc.md`](06-glossary-quy-uoc.md) | Thuật ngữ, đơn vị, timezone, quy ước đặt tên | Trước khi đặt tên bất cứ thứ gì |
-| [`tasks/`](tasks/README.md) | Quy trình, bảng task và hồ sơ bàn giao trong repo — **nguồn sự thật cho task/trạng thái** từ 19/08 | Khi nhận/cập nhật bất kỳ task nào |
-| [`19-ho-so-review-va-chot-kien-truc.md`](19-ho-so-review-va-chot-kien-truc.md) | Hồ sơ một file: đề tài, phạm vi, kiến trúc, thí nghiệm, 7 quyết định và phiếu review | Gửi engineer/GVHD trước khi khóa contract |
-| [`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md) | Phân công từ 15/08: A core/algorithms, B UI/delivery; điểm giao typed IPC | Mỗi đầu tuần và khi giao task |
-| [`23-ke-hoach-sau-demo-30-08.md`](23-ke-hoach-sau-demo-30-08.md) | Lịch sử kế hoạch sau demo 30/08; ưu tiên mới ở docs/24 và board | Khi cần lịch sử phân công |
-| [`24-ke-hoach-demo-theo-chang.md`](24-ke-hoach-demo-theo-chang.md) | Kế hoạch giao Worker: yêu cầu R01–R25, C00–C09, C08A/B/C, evidence và review | Điểm vào hiện tại, cập nhật 11/09 |
-| [`25-nguyen-ly-deploy-migrate-demo-14-09.md`](25-nguyen-ly-deploy-migrate-demo-14-09.md) | Nguyên lý từng loại deploy/migrate, phạm vi và bằng chứng demo 14/09 | Đọc trước khi giao C03/C04 hoặc trình bày demo |
-| [`27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md`](27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md) | Kế hoạch hợp nhất phần chưa tự động: publish/firewall, DNS/domain, Doctor, dữ liệu ML, detector và backlog tối ưu | Khi lập task sau demo hoặc chốt phạm vi P0–P3 |
-| [`28-danh-gia-san-sang-vercel-tren-vps.md`](28-danh-gia-san-sang-vercel-tren-vps.md) | Đánh giá năng lực sản phẩm so với Vercel/Dokploy/Coolify | Khi lập roadmap sản phẩm |
-| [`29-ke-hoach-demo-14-10.md`](29-ke-hoach-demo-14-10.md) | Lịch và gate demo 14/10, ưu tiên deploy từ Git trên VPS thật | Trước mỗi checkpoint demo |
-| [`30-audit-git-first-deploy.md`](30-audit-git-first-deploy.md) | Kiểm kê đường deploy hiện tại, hợp đồng Git-first và thứ tự G0–G3 | Trước khi sửa IPC/schema/deploy UI |
-| [`31-lo-trinh-hoan-thien-san-pham.md`](31-lo-trinh-hoan-thien-san-pham.md) | Chuẩn nghiệm thu toàn sản phẩm: tự động hóa, hai nguồn deploy, template, migrate, monitor/ML và kiến trúc auto deploy | Trước khi chia task sau demo và chốt trạng thái hoàn thành |
-| [`32-tham-khao-openship-va-paas-tu-host.md`](32-tham-khao-openship-va-paas-tu-host.md) | Cơ chế tham khảo từ OpenShip, Coolify, Dokku, CapRover; phần nên áp dụng và ranh giới G0 | Trước khi giao Git G0, ingress và auto deploy |
-
-## Kỹ thuật
-
-| File | Nội dung |
+| Path | Description |
 |---|---|
-| [`contracts/`](contracts/) | **Hợp đồng kỹ thuật** — schema, API, IPC, interface, format file. Xem [`contracts/README.md`](contracts/README.md) |
-| [`08-vps-setup.md`](08-vps-setup.md) | Runbook dựng VPS từ đầu trong 30 phút |
-| [`21-ke-hoach-thue-vps.md`](21-ke-hoach-thue-vps.md) | Kế hoạch thuê VPS rẻ nhất & tối ưu: provider, gói, tính theo giờ, ngân sách |
-| [`22-kich-ban-demo-vps-deploy-co-ban.md`](22-kich-ban-demo-vps-deploy-co-ban.md) | Runbook demo 6–8 phút: thêm VPS, quét môi trường, deploy Express thật và xử lý sự cố |
-| [`09-moi-truong-dev.md`](09-moi-truong-dev.md) | Setup máy dev (Windows), dependency đã duyệt, bẫy đã biết |
-| [`10-quy-uoc-code.md`](10-quy-uoc-code.md) | Cấu trúc code, xử lý lỗi, logging, quy ước async/SSH |
-| [`11-chien-luoc-test.md`](11-chien-luoc-test.md) | Unit test (chỉ 3 chỗ), smoke test 10 phút, soak test 24h |
-| [`14-quyet-dinh-kien-truc.md`](14-quyet-dinh-kien-truc.md) | 11 ADR — gồm Product mode control plane, trade-off và phạm vi đồ án |
+| [`contracts/`](contracts/) | Interface definitions shared across Electron main/renderer, ML service, collector, and control plane (`schema.sql`, `ml-api.openapi.yaml`, `ipc-contract.ts`, `detector-contract.ts`, `metric-format.md`, `deploy-events.md`, and Product mode contracts). See [`contracts/README.md`](contracts/README.md). |
 
-## Thí nghiệm & báo cáo
+## Architecture & Engineering Guides
 
-| File | Nội dung |
+| File | Description |
 |---|---|
-| [`07-giao-thuc-thi-nghiem.md`](07-giao-thuc-thi-nghiem.md) | **Phần ăn điểm nhất.** Kịch bản fault, ground truth, quy trình 1 run, phân tích offline |
-| [`12-outline-bao-cao.md`](12-outline-bao-cao.md) | Outline 6 chương, phân công, lịch viết, quy tắc trích dẫn |
-| [`13-so-rui-ro.md`](13-so-rui-ro.md) | Risk register, review 2 tuần/lần |
-| [`15-checklists.md`](15-checklists.md) | Tuần 0, smoke test, hằng tuần, trước thí nghiệm, ngày bảo vệ |
-| [`16-bao-ve-va-qa.md`](16-bao-ve-va-qa.md) | Slide, 3 lớp demo dự phòng, 15 câu hỏi phản biện + hướng trả lời |
-| [`smoke-log.md`](smoke-log.md) | Nhật ký smoke test hằng tuần (vào phụ lục báo cáo) |
+| [`14-quyet-dinh-kien-truc.md`](14-quyet-dinh-kien-truc.md) | Architecture Decision Records (ADR-001 to ADR-011) covering SSH-only design, container isolation, SQLite storage, ML sidecar runtime, and Product mode control plane trade-offs. |
+| [`09-moi-truong-dev.md`](09-moi-truong-dev.md) | Local development environment setup (Windows 11 / Node 22 / pnpm / Python 3.12), approved dependencies, and platform notes. |
+| [`08-vps-setup.md`](08-vps-setup.md) | Target Ubuntu 24.04 LTS VPS preparation runbook (Docker, SSH hardening, firewall, non-root setup). |
 
-## Cho AI
+## Experimental Evaluation
 
-| File | Nội dung |
+| File | Description |
 |---|---|
-| [`prompts/00-context-chung.md`](prompts/00-context-chung.md) | Khối ngữ cảnh dán vào đầu mọi phiên chat với model bất kỳ |
-| [`prompts/01-task-from-board.md`](prompts/01-task-from-board.md) | Mẫu giao một task trong `docs/tasks/` cho AI: scope, DoD, quyền sửa/commit/push và quy tắc bắt buộc cập nhật bảng task |
-| [`prompts/m01`…`m12`](prompts/) | Một brief hoàn chỉnh cho mỗi module: input, output, ràng buộc, định nghĩa xong, cách test |
-| [`prompts/99-review.md`](prompts/99-review.md) | Prompt để AI tự review code trước khi mở PR |
-
----
-
-## ⚠ `_archive/`
-
-Chứa 4 file kế hoạch **bản gốc 26/07/2026, đã bị thay thế**. Giữ lại chỉ để đối chiếu lịch sử
-và để biết đã sửa những gì. **Không dùng làm tài liệu tham chiếu** — xem
-[`_archive/README.md`](_archive/README.md).
-
----
-
-## Quy tắc bảo trì tài liệu
-
-- Sửa contract → ghi `DECISIONS.md` **cùng commit**.
-- Xong một module → tick vào `05-truy-vet-yeu-cau.md`.
-- Cuối mỗi tuần → cập nhật cột "Thực tế" trong `04-timeline.md` (bảng này vào phụ lục báo cáo).
-- Tài liệu và code lệch nhau → sửa tài liệu trước, code sau.
+| [`07-giao-thuc-thi-nghiem.md`](07-giao-thuc-thi-nghiem.md) | Formal evaluation protocol: 5 fault scenarios, load generation, clock synchronization, ground-truth labeling, and P/R/F1/delay metrics. |

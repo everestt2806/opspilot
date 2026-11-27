@@ -61,6 +61,23 @@ export class VpsRepository {
     return vps
   }
 
+  /** Include archived profiles: removing a VPS must not forget its trusted key. */
+  getEndpointFingerprint(host: string, port: number): string | undefined {
+    const pins = this.database
+      .prepare(
+        `SELECT DISTINCT host_fingerprint FROM vps
+       WHERE lower(host) = lower(?) AND port = ? AND host_fingerprint IS NOT NULL`
+      )
+      .all(host, port) as Array<{ host_fingerprint: string }>
+    if (pins.length > 1) {
+      throw new AppError(
+        'VALIDATION',
+        'VPS có nhiều khóa SSH đã lưu. Cần đối chiếu các hồ sơ trước khi kết nối.'
+      )
+    }
+    return pins[0]?.host_fingerprint
+  }
+
   create(input: CreateVpsRecord): Vps {
     try {
       return this.database.transaction(() => {
@@ -187,7 +204,8 @@ export class VpsRepository {
       patch.username !== undefined ||
       patch.auth_type !== undefined ||
       patch.credential !== undefined
-    if (securityProfileChanged) assignments.push('ssh_security_revision = ssh_security_revision + 1')
+    if (securityProfileChanged)
+      assignments.push('ssh_security_revision = ssh_security_revision + 1')
 
     if (assignments.length === 0) {
       return this.getById(id)

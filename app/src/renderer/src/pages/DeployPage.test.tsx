@@ -214,6 +214,83 @@ async function reachStep3(invoke: ReturnType<typeof vi.fn>): Promise<void> {
   await screen.findByText('RAM trống')
 }
 
+describe('Deploy runtime preparation in review', () => {
+  const missingRuntime = {
+    ...PRECHECK_PASS,
+    passed: false,
+    runtime_preparation_required: true,
+    checks: [
+      ...PRECHECK_PASS.checks,
+      { label: 'Docker', required: 'daemon and Compose', actual: 'not ready', ok: false }
+    ]
+  }
+  it('prepares in the same page, then rechecks before enabling deploy', async () => {
+    let checks = 0
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:precheck': async () => ({
+        ok: true,
+        data: ++checks === 1 ? missingRuntime : PRECHECK_PASS
+      }),
+      'vps:prepare-runtime': async () => ({
+        ok: true,
+        data: {
+          vps_id: 1,
+          docker_version: '29.10.0',
+          compose_version: '5.8.0',
+          installed_docker: true,
+          workdir_ready: true,
+          checked_at: new Date().toISOString()
+        }
+      })
+    })
+    render(<DeployPage />)
+    await reachStep3(invoke)
+    expect(
+      (screen.getByText(strings.deploy.review.deploy).closest('button') as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
+    fireEvent.click(screen.getByText('Prepare VPS'))
+    await waitFor(() => expect(checks).toBe(2))
+    await waitFor(() =>
+      expect(
+        (screen.getByText(strings.deploy.review.deploy).closest('button') as HTMLButtonElement)
+          .disabled
+      ).toBe(false)
+    )
+    expect(invoke).toHaveBeenCalledWith('vps:prepare-runtime', { vps_id: 1, consent: true })
+    expect(invoke.mock.calls.some(([channel]) => channel === 'deploy:start')).toBe(false)
+  })
+  it('does not suggest installing Docker when only capacity is insufficient', async () => {
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:precheck': async () => ({ ok: true, data: { ...PRECHECK_PASS, passed: false } })
+    })
+    render(<DeployPage />)
+    await reachStep3(invoke)
+    expect(screen.queryByText('Prepare VPS')).toBeNull()
+  })
+  it('does not recheck or start after the page closes during preparation', async () => {
+    let finish!: (result: unknown) => void
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:precheck': async () => ({ ok: true, data: missingRuntime }),
+      'vps:prepare-runtime': () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    })
+    const page = render(<DeployPage />)
+    await reachStep3(invoke)
+    fireEvent.click(screen.getByText('Prepare VPS'))
+    await waitFor(() => expect(finish).toBeDefined())
+    page.unmount()
+    await act(async () => finish({ ok: true, data: { vps_id: 1 } }))
+    expect(invoke.mock.calls.filter(([channel]) => channel === 'deploy:precheck')).toHaveLength(1)
+    expect(invoke.mock.calls.some(([channel]) => channel === 'deploy:start')).toBe(false)
+  })
+})
+
 describe('DeployPage source description locales', () => {
   it.each(['en', 'vi', 'cn', 'jp'] as const)(
     '%s keeps the Deploy description accurate for local and Git sources',
@@ -223,7 +300,7 @@ describe('DeployPage source description locales', () => {
       const localized = getStrings(locale)
       render(<DeployPage />)
 
-      await screen.findByText(localized.deploy.description)
+      await screen.findByText(localized.deploy.git.modeGit)
       expect(screen.getByText(localized.deploy.description)).toBeTruthy()
       fireEvent.click(screen.getByText(localized.deploy.git.modeGit))
       expect(screen.getByText(localized.deploy.description)).toBeTruthy()
@@ -423,7 +500,9 @@ describe('DeployPage safe environment defaults', () => {
       fireEvent.click(screen.getByText(strings.deploy.next))
 
       await screen.findByText('RAM trống')
-      const precheckInput = invoke.mock.calls.find(([channel]) => channel === 'deploy:precheck')?.[1] as {
+      const precheckInput = invoke.mock.calls.find(
+        ([channel]) => channel === 'deploy:precheck'
+      )?.[1] as {
         env: Record<string, string>
       }
       expect(precheckInput.env).toEqual({})
@@ -701,7 +780,7 @@ describe('DeployPage — wizard va log', () => {
 
     expect(await screen.findByText('Deploy log')).toBeTruthy()
     expect(screen.getByText('Live output')).toBeTruthy()
-    expect(terminalOptions[0]?.convertEol).toBe(true)
+    await waitFor(() => expect(terminalOptions[0]?.convertEol).toBe(true))
     expect(invoke).toHaveBeenCalledWith('deploy:start', {
       vps_id: 1,
       app_id: undefined,
